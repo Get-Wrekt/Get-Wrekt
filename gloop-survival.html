@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Gloop Survival</title>
+
   <style>
     * { box-sizing: border-box; }
 
@@ -157,16 +158,13 @@
       font-size: 14px;
     }
 
-    button, input {
+    button {
       padding: 11px 14px;
       border: 2px solid #f5d741;
       border-radius: 6px;
-      font: inherit;
-    }
-
-    button {
       color: #141914;
       background: #f5d741;
+      font: inherit;
       font-weight: bold;
       cursor: pointer;
     }
@@ -178,14 +176,17 @@
       cursor: not-allowed;
     }
 
-    input {
-      width: min(320px, 100%);
-      color: #fff;
-      background: #141914;
+    #upgrade-status { min-height: 22px; color: #ffe978; }
+
+    .tutorial-content {
+      max-width: 680px;
+      margin: 0 auto;
+      text-align: left;
+      line-height: 1.55;
     }
 
-    #error { color: #ff7770; }
-    #upgrade-status { min-height: 22px; color: #ffe978; }
+    .tutorial-content h2 { margin-bottom: 4px; }
+    .tutorial-content ul { padding-left: 24px; }
 
     @media (max-width: 600px) {
       #panel { padding: 14px; }
@@ -218,8 +219,17 @@
     const W = canvas.width;
     const H = canvas.height;
     const bounds = { left: 25, top: 75, right: W - 25, bottom: H - 25 };
-    const STORAGE_KEY = "gloopAccountsV1";
+
     const MAX_HYPNOTIZED_ENEMIES = 10;
+    const PLAYER_HITBOX_SCALE = 0.8;
+    const ENEMY_HITBOX_SCALE = 0.6;
+
+    const FLAME_RANGE = 60;
+    const FLAME_DAMAGE = 5;
+    const FLAME_COOLDOWN = 1;
+    const BURN_DURATION = 3;
+    const SNIPER_BURN_DURATION = 5;
+    const FREEZE_DURATION = 2;
 
     const mergerCenter = {
       x: (bounds.left + bounds.right) / 2,
@@ -237,19 +247,26 @@
     let selectedMode = "Medium";
     let waveDuration = modes[selectedMode].waveDuration;
 
-    const PLAYER_HITBOX_SCALE = 0.8;
-    const ENEMY_HITBOX_SCALE = 0.6;
+    const bossHealthScaling = {
+      "Very Easy": { firstPercent: 80, firstIncrement: 50 },
+      "Easy": { firstPercent: 90, firstIncrement: 60 },
+      "Medium": { firstPercent: 100, firstIncrement: 80 },
+      "Hard": { firstPercent: 120, firstIncrement: 90 },
+      "Impossible": { firstPercent: 150, firstIncrement: 100 }
+    };
 
-    const FLAME_RANGE = 60;
-    const FLAME_DAMAGE = 5;
-    const FLAME_COOLDOWN = 1;
-    const BURN_DURATION = 3;
-    const SNIPER_BURN_DURATION = 5;
-    const FREEZE_DURATION = 2;
+    function getBossHealthPercent(bossNumber, mode = selectedMode) {
+      const settings = bossHealthScaling[mode] || bossHealthScaling.Medium;
+      const index = Math.max(0, bossNumber - 1);
+
+      return settings.firstPercent +
+        index * settings.firstIncrement +
+        5 * index * (index - 1);
+    }
 
     const weapons = {
       Pistol: { damage: 40, cooldown: 0.24, speed: 760, pellets: 1, spread: 0 },
-      "AK-47": { damage: 24, cooldown: 0.10, speed: 800, pellets: 1, spread: 0.08 },
+      "AK-47": { damage: 18, cooldown: 0.10, speed: 800, pellets: 1, spread: 0.08 },
       Shotgun: { damage: 27, cooldown: 0.50, speed: 700, pellets: 6, spread: 0.28 },
       Sniper: { damage: 140, cooldown: 0.90, speed: 1150, pellets: 1, spread: 0 },
       "Grenade Launcher": { damage: 65, cooldown: 0.72, speed: 500, pellets: 1, spread: 0 }
@@ -285,7 +302,7 @@
         3: "Bullets penetrate 1 enemy.",
         5: "Bullets are 50% more accurate.",
         10: "Bullets lean toward the nearest enemy.",
-        15: "Bullets swerve toward enemies."
+        15: "Bullets swerve toward enemies and stop penetrating."
       },
       "Grenade Launcher": {
         3: "Explosions have a larger radius.",
@@ -313,7 +330,7 @@
       bossOverlord: { size: 170, hp: 8000, speed: 45, damage: 50, reward: 500, color: "#8b35b5" },
       rusherBossOverlord: { size: 145, hp: 6500, speed: 100, damage: 40, reward: 550, color: "#e5a91f" },
       iceBossOverlord: { size: 155, hp: 7000, speed: 42, damage: 40, reward: 550, color: "#28b9e0" },
-      flameBossOverlord: { size: 155, hp: 7000, speed: 65, damage: 40, reward: 550, color: "#f04420" },
+      flameBossOverlord: { size: 155, hp: 7000, speed: 65, damage: 40, reward: 40, color: "#f04420" },
       motherBossOverlord: { size: 180, hp: 10000, speed: 38, damage: 45, reward: 750, color: "#c52d83" }
     };
 
@@ -339,7 +356,7 @@
       mother: "Mother Gloop",
       merger: "Merger Gloop",
       overlord: "Overlord Gloop",
-      rusherOverlord: "Rusher Overlord",
+      rusherOverlord: "Rusher Overlord Gloop",
       iceOverlord: "Ice Overlord",
       flameOverlord: "Flame Overlord",
       motherOverlord: "Mother Overlord",
@@ -350,13 +367,15 @@
       motherBossOverlord: "Mother Boss Overlord"
     };
 
+    // Boss types are the values in bossWaves.
+    function isOverlord(enemy) {
+      return Object.values(bossWaves).includes(enemy.type);
+    }
+
     const keys = new Set();
     const mouse = { x: W / 2, y: H / 2, buttons: [false, false] };
 
-    let accountName = null;
-    let account = null;
     let runCoins = 0;
-
     let player = null;
     let enemies = [];
     let bullets = [];
@@ -377,8 +396,9 @@
     let lastTime = 0;
     let runDamageBonus = 0;
     let runFireRateBonus = 0;
-    let mergerPhase = "gathering";
+    let runDamageResistance = 0;
 
+    let mergerPhase = "gathering";
     let previewWaveNumber = 0;
     let previewEnemies = [];
     let activeWaveEnemies = [];
@@ -396,27 +416,6 @@
       );
     }
 
-    function readAccounts() {
-      try {
-        const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-        return data && typeof data === "object" ? data : {};
-      } catch {
-        return {};
-      }
-    }
-
-    function saveAccount() {
-      if (!accountName || !account) return;
-
-      try {
-        const accounts = readAccounts();
-        accounts[accountName] = account;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
-      } catch (error) {
-        console.error("Could not save account:", error);
-      }
-    }
-
     function showOverlay(html) {
       panel.innerHTML = html;
       overlay.style.display = "grid";
@@ -429,129 +428,34 @@
     function escapeHtml(value) {
       const element = document.createElement("span");
       element.textContent = String(value);
-      return element.textContent;
+      return element.innerHTML;
     }
 
-    function showHome(errorMessage = "") {
+    function showHomeScreen() {
       paused = true;
+      gameover = false;
+      choosingUpgrade = false;
+      previewElement.innerHTML = "";
 
       showOverlay(`
         <h1>GLOOP SURVIVAL</h1>
-        <p>Log in to load your account, or create a new one.</p>
-        <div class="actions">
-          <button id="login-button">LOG IN</button>
-          <button id="create-button">CREATE ACCOUNT</button>
-        </div>
-        <p id="error">${escapeHtml(errorMessage)}</p>
-      `);
-
-      panel.querySelector("#login-button").onclick = () => showAccountForm(false);
-      panel.querySelector("#create-button").onclick = () => showAccountForm(true);
-    }
-
-    function showAccountForm(create) {
-      showOverlay(`
-        <h1>${create ? "CREATE ACCOUNT" : "LOG IN"}</h1>
-        <p>${create
-          ? "Choose a username and a password of at least 6 characters."
-          : "Enter your username and password."}</p>
-        <form id="account-form">
-          <input id="username" maxlength="20" autocomplete="username"
-                 placeholder="Username" required>
-          <br><br>
-          <input id="password" type="password" maxlength="100"
-                 autocomplete="${create ? "new-password" : "current-password"}"
-                 placeholder="Password" required>
-          <div class="actions">
-            <button type="submit">${create ? "CREATE" : "LOG IN"}</button>
-            <button type="button" id="back-button">BACK</button>
-          </div>
-        </form>
-        <p id="error"></p>
-      `);
-
-      panel.querySelector("#back-button").onclick = () => showHome();
-
-      panel.querySelector("#account-form").onsubmit = event => {
-        event.preventDefault();
-
-        const username = panel.querySelector("#username").value.trim();
-        const password = panel.querySelector("#password").value;
-        const error = panel.querySelector("#error");
-
-        if (!/^[a-zA-Z0-9_-]{3,20}$/.test(username)) {
-          error.textContent = "Use 3–20 letters, numbers, underscores, or hyphens.";
-          return;
-        }
-
-        if (password.length < 6) {
-          error.textContent = "Password must be at least 6 characters.";
-          return;
-        }
-
-        const accounts = readAccounts();
-        const matchingName = Object.keys(accounts).find(
-          name => name.toLowerCase() === username.toLowerCase()
-        );
-
-        if (create) {
-          if (matchingName) {
-            error.textContent = "That username already exists. Please log in.";
-            return;
-          }
-
-          accountName = username;
-          account = { password };
-        } else {
-          if (!matchingName) {
-            error.textContent = "Account not found.";
-            return;
-          }
-
-          if (accounts[matchingName].password !== password) {
-            error.textContent = "Incorrect password.";
-            return;
-          }
-
-          accountName = matchingName;
-          account = { password: String(accounts[matchingName].password || "") };
-        }
-
-        saveAccount();
-        showAccountHome();
-      };
-    }
-
-    function showAccountHome() {
-      paused = true;
-
-      showOverlay(`
-        <h1>GLOOP SURVIVAL</h1>
-        <p>Logged in as <strong>${escapeHtml(accountName)}</strong></p>
-        <p>Coins reset to 0 at the start of every run.</p>
+        <p>Survive the waves. Upgrade your weapons. Defeat the Gloops.</p>
         <div class="actions">
           <button id="play-button">PLAY</button>
-          <button id="logout-button">LOG OUT</button>
+          <button id="tutorial-button">TUTORIAL</button>
         </div>
       `);
 
       panel.querySelector("#play-button").onclick = showModeSelect;
-      panel.querySelector("#logout-button").onclick = () => {
-        accountName = null;
-        account = null;
-        player = null;
-        runCoins = 0;
-        previewElement.innerHTML = "";
-        showHome();
-      };
+      panel.querySelector("#tutorial-button").onclick = showTutorial;
     }
 
     function showModeSelect() {
       paused = true;
 
       showOverlay(`
-        <h1>SELECT MODE</h1>
-        <p>Choose how long each wave lasts.</p>
+        <h1>CHOOSE YOUR DIFFICULTY</h1>
+        <p>Difficulty controls wave duration and boss health scaling.</p>
         <div class="actions">
           ${Object.entries(modes).map(([name, mode]) => `
             <button data-mode="${escapeHtml(name)}">
@@ -560,7 +464,7 @@
           `).join("")}
         </div>
         <div class="actions">
-          <button id="back-button">BACK</button>
+          <button id="back-home-button">BACK</button>
         </div>
       `);
 
@@ -572,7 +476,45 @@
         };
       });
 
-      panel.querySelector("#back-button").onclick = showAccountHome;
+      panel.querySelector("#back-home-button").onclick = showHomeScreen;
+    }
+
+    function showTutorial() {
+      paused = true;
+
+      showOverlay(`
+        <h1>HOW TO PLAY</h1>
+        <div class="tutorial-content">
+          <h2>Move</h2>
+          <p>Use <strong>WASD</strong> or the <strong>arrow keys</strong> to move around the arena.</p>
+
+          <h2>Shoot</h2>
+          <p>Aim with your mouse. Hold <strong>left-click</strong> to fire the weapon in Slot 1 and <strong>right-click</strong> to fire Slot 2.</p>
+          <p>Press <strong>P</strong> to pause or resume during a run.</p>
+
+          <h2>Waves and survival</h2>
+          <p>Enemies chase and attack you. Survive until the wave timer ends or defeat all enemies. Avoid touching enemies, collect dropped coins, and pick up cheese to restore health.</p>
+
+          <h2>Enemies</h2>
+          <ul>
+            <li><strong>Basic Gloops:</strong> chase and damage you on contact.</li>
+            <li><strong>Rushers:</strong> fast, but less durable.</li>
+            <li><strong>Tanks:</strong> slow and tough; they split into smaller Gloops when defeated.</li>
+            <li><strong>Flame Gloops:</strong> damage you when you get close.</li>
+            <li><strong>Ice Gloops:</strong> slow you when they hit.</li>
+            <li><strong>Merger Gloops:</strong> gather and combine into a larger, stronger Gloop.</li>
+            <li><strong>Overlords:</strong> powerful bosses that appear on milestone waves.</li>
+          </ul>
+
+          <h2>Shop and upgrades</h2>
+          <p>Every fifth wave, visit the shop to spend coins on upgrades. You can improve your weapons, health, speed, fire rate, and damage resistance. New guns are available every tenth wave.</p>
+        </div>
+        <div class="actions">
+          <button id="tutorial-back-button">BACK TO HOME</button>
+        </div>
+      `);
+
+      panel.querySelector("#tutorial-back-button").onclick = showHomeScreen;
     }
 
     function makeWavePreview(waveNumber) {
@@ -626,7 +568,7 @@
     }
 
     function updateWavePreview() {
-      if (!account || !player || gameover) {
+      if (!player || gameover) {
         previewElement.innerHTML = "";
         return;
       }
@@ -649,10 +591,7 @@
 
     function spawn(kind, x, y) {
       const type = enemyTypes[kind];
-      if (!type) {
-        console.error(`Unknown enemy type: ${kind}`);
-        return null;
-      }
+      if (!type) return null;
 
       if (x === undefined || y === undefined) {
         const side = Math.floor(Math.random() * 4);
@@ -667,8 +606,7 @@
 
       const enemy = {
         type: kind,
-        x,
-        y,
+        x, y,
         hp: type.hp,
         maxHp: type.hp,
         speed: type.speed,
@@ -679,13 +617,14 @@
         hitCooldown: 0,
         burnCooldown: 0,
         burnTimer: 0,
+        burnTick: 0,
         frozenTimer: 0,
         hypnotized: false,
         countedAsDefeated: false,
         attackTarget: null,
         facingAngle: 0,
         summonCooldown: 3,
-        dashCooldown: kind.toLowerCase().includes("overlord") ? 2.5 : 0,
+        dashCooldown: 2.5,
         dashTime: 0,
         dashVx: 0,
         dashVy: 0
@@ -695,27 +634,17 @@
       return enemy;
     }
 
-    function isOverlord(enemy) {
-      return enemy.type.toLowerCase().includes("overlord");
+    function getBossNumber(waveNumber) {
+      return Math.floor(waveNumber / 10);
     }
 
-    function scaleEnemyForWave(enemy, waveNumber, bossNumber = 0) {
+    function scaleEnemyForWave(enemy, waveNumber) {
       if (isOverlord(enemy)) {
-        const difficultyBonus = {
-          "Very Easy": 0.50,
-          "Easy": 1.00,
-          "Medium": 1.50,
-          "Hard": 2.00,
-          "Impossible": 2.50
-        }[selectedMode] ?? 0;
+        const bossNumber = getBossNumber(waveNumber);
+        const healthMultiplier = getBossHealthPercent(bossNumber) / 100;
 
-        const hpMultiplier =
-          (1 + difficultyBonus) * (1 + (bossNumber - 1) * 0.8) * 1.2;
-        const damageMultiplier = 1 + (bossNumber - 1) * 0.12;
-
-        enemy.maxHp = Math.round(enemy.maxHp * hpMultiplier);
+        enemy.maxHp = Math.round(enemy.maxHp * healthMultiplier);
         enemy.hp = enemy.maxHp;
-        enemy.damage = Math.round(enemy.damage * damageMultiplier);
         return;
       }
 
@@ -728,36 +657,32 @@
     }
 
     function mergerHealthForSize(size) {
-      const baseSize = enemyTypes.merger.size;
-      const baseHealth = enemyTypes.merger.hp;
-      return baseHealth * Math.pow(size / baseSize, 2);
+      return enemyTypes.merger.hp *
+        Math.pow(size / enemyTypes.merger.size, 2);
     }
 
     function mergerSpeedForHealth(maxHp) {
       const baseSpeed = enemyTypes.normal.speed;
-      const baseHealth = enemyTypes.merger.hp;
       const maxSpeed = enemyTypes.rusher.speed;
-      const healthRatio = Math.max(1, maxHp / baseHealth);
+      const healthRatio = Math.max(1, maxHp / enemyTypes.merger.hp);
 
-      const originalIncrease = baseSpeed * (Math.sqrt(healthRatio) - 1);
-      return Math.min(maxSpeed, baseSpeed + originalIncrease / 27);
+      return Math.min(
+        maxSpeed,
+        baseSpeed + baseSpeed * (Math.sqrt(healthRatio) - 1) / 27
+      );
     }
 
     function updateMergerHealth(first, second) {
-      const firstHealthPercent = first.maxHp > 0 ? first.hp / first.maxHp : 0;
-      const secondHealthPercent = second.maxHp > 0 ? second.hp / second.maxHp : 0;
-
+      const firstHealthPercent = first.hp / first.maxHp;
+      const secondHealthPercent = second.hp / second.maxHp;
       const completedBossWaves = Math.floor((wave - 1) / 10);
       const waveMultiplier = Math.pow(1.5, completedBossWaves);
 
       first.maxHp = Math.round(mergerHealthForSize(first.size) * waveMultiplier);
-
-      const mergedHealthPercent = Math.min(
+      first.hp = Math.max(
         1,
-        firstHealthPercent + secondHealthPercent
+        Math.round(first.maxHp * Math.min(1, firstHealthPercent + secondHealthPercent))
       );
-
-      first.hp = Math.max(1, Math.round(first.maxHp * mergedHealthPercent));
       first.speed = mergerSpeedForHealth(first.maxHp);
     }
 
@@ -765,11 +690,8 @@
       messageTimer = 2;
       waveTimer = waveDuration;
       mergerPhase = "gathering";
-
       activeWaveEnemies = previewEnemies.map(enemy => ({ ...enemy }));
       wave = previewWaveNumber;
-
-      // Hypnotized enemies are allies and never count toward the wave total.
       enemiesRemaining = enemies.filter(enemy => !enemy.hypnotized).length;
 
       for (const group of activeWaveEnemies) {
@@ -777,12 +699,7 @@
           const enemy = spawn(group.type);
           if (!enemy) continue;
 
-          if (isOverlord(enemy)) {
-            scaleEnemyForWave(enemy, wave, Math.floor(wave / 10));
-          } else {
-            scaleEnemyForWave(enemy, wave);
-          }
-
+          scaleEnemyForWave(enemy, wave);
           enemiesRemaining++;
         }
       }
@@ -791,8 +708,6 @@
     }
 
     function resetGame() {
-      if (!account) return;
-
       runCoins = 0;
       enemies = [];
       bullets = [];
@@ -813,15 +728,15 @@
       weaponLevels = { Pistol: 1 };
       runDamageBonus = 0;
       runFireRateBonus = 0;
+      runDamageResistance = 0;
 
-      const maxHp = 120;
       player = {
         x: (bounds.left + bounds.right) / 2,
         y: (bounds.top + bounds.bottom) / 2,
         size: 28,
         speed: 260,
-        hp: maxHp,
-        maxHp
+        hp: 120,
+        maxHp: 120
       };
 
       previewWaveNumber = 1;
@@ -852,11 +767,9 @@
         .map(Number)
         .find(milestone => milestone > level);
 
-      if (!nextMilestone) {
-        return "Increase this weapon's damage and fire rate.";
-      }
-
-      return `Increase damage and fire rate. Level ${nextMilestone}: ${milestones[nextMilestone]}`;
+      return nextMilestone
+        ? `Increase damage and fire rate. Level ${nextMilestone}: ${milestones[nextMilestone]}`
+        : "Increase this weapon's damage and fire rate.";
     }
 
     function updateEquippedSlots(slot1, slot2) {
@@ -870,7 +783,6 @@
 
       const equipped = [first, ...(second ? [second] : [])];
       const unequipped = runWeapons.filter(name => !equipped.includes(name));
-
       runWeapons = [...equipped, ...unequipped];
     }
 
@@ -909,6 +821,15 @@
           description: `Current bonus: +${Math.round(runFireRateBonus * 100)}% fire rate`,
           cost: 35 * (Math.round(runFireRateBonus / 0.25) + 1) + 50,
           action() { runFireRateBonus += 0.25; }
+        },
+        {
+          id: "damage-resistance",
+          title: "Damage Resistance",
+          description: `Current resistance: ${Math.round(runDamageResistance * 100)}%`,
+          cost: 50 * (Math.round(runDamageResistance / 0.10) + 1) + 50,
+          action() {
+            runDamageResistance = Math.min(0.75, runDamageResistance + 0.10);
+          }
         },
         {
           id: "health",
@@ -955,7 +876,7 @@
           upgrades.push({
             id: `buy-gun-${name}`,
             title: `Buy ${name}`,
-            description: "Add this gun to your inventory. Equip it in either weapon slot.",
+            description: "Add this gun to your inventory and equip it in a weapon slot.",
             cost,
             isGunPurchase: true,
             action() { buyGun(name); }
@@ -965,19 +886,15 @@
 
       showOverlay(`
         <h1>WAVE ${shopWave} CLEARED — UPGRADES</h1>
-        <p>Spend this run's coins here. Coins do not carry over to another run.</p>
-        <p>
-          <strong>Coins: <span id="shop-coins">${runCoins}</span></strong>
-          ${canBuyGuns
-            ? "<br>Gun purchases are available this shop."
-            : "<br>New guns are available every 10 waves."}
-        </p>
+        <p>Spend this run's coins here. Coins reset when you start a new run.</p>
+        <p><strong>Coins: ${runCoins}</strong><br>
+        ${canBuyGuns ? "Gun purchases are available this shop." : "New guns are available every 10 waves."}</p>
         <p id="upgrade-status">${escapeHtml(status)}</p>
 
         <div class="shop-layout">
           <aside class="inventory">
             <h2>Gun Inventory</h2>
-            <p>Choose which owned guns to equip. You can own more than two.</p>
+            <p>Choose which owned guns to equip.</p>
 
             <label for="slot-1"><strong>Slot 1</strong></label>
             <select id="slot-1">
@@ -1001,8 +918,7 @@
             <h3>Owned Guns</h3>
             <ul>
               ${runWeapons.map(name => `
-                <li>
-                  ${escapeHtml(name)} — Level ${weaponLevels[name] || 1}
+                <li>${escapeHtml(name)} — Level ${weaponLevels[name] || 1}
                   ${runWeapons[0] === name ? " (Slot 1)" : ""}
                   ${runWeapons[1] === name ? " (Slot 2)" : ""}
                 </li>
@@ -1011,14 +927,15 @@
           </aside>
 
           <section class="upgrade-list">
-            ${upgrades.map(upgrade => `
+            ${upgrades.map(item => `
               <div class="upgrade-card">
-                <h2>${escapeHtml(upgrade.title)}</h2>
-                <p>${escapeHtml(upgrade.description)}</p>
-                <button
-                  data-upgrade="${escapeHtml(upgrade.id)}"
-                  ${runCoins < upgrade.cost ? "disabled" : ""}>
-                  ${upgrade.isGunPurchase ? "" : "Buy — "}${upgrade.cost} coins
+                <h2>${escapeHtml(item.title)}</h2>
+                <p>${escapeHtml(item.description)}</p>
+                <button data-upgrade="${escapeHtml(item.id)}"
+                  ${runCoins < item.cost ||
+                    (item.id === "damage-resistance" && runDamageResistance >= 0.75)
+                    ? "disabled" : ""}>
+                  ${item.isGunPurchase ? "" : "Buy — "}${item.cost} coins
                 </button>
               </div>
             `).join("")}
@@ -1045,14 +962,14 @@
 
       panel.querySelectorAll("[data-upgrade]").forEach(button => {
         button.onclick = () => {
-          const selected = upgrades.find(item => item.id === button.dataset.upgrade);
-          if (!selected || runCoins < selected.cost) return;
+          const item = upgrades.find(upgrade => upgrade.id === button.dataset.upgrade);
+          if (!item || runCoins < item.cost) return;
+          if (item.id === "damage-resistance" && runDamageResistance >= 0.75) return;
 
           updateEquippedSlots(slot1, slot2);
-          runCoins -= selected.cost;
-          selected.action();
-
-          renderUpgradeShop(`${selected.title} purchased.`, shopWave);
+          runCoins -= item.cost;
+          item.action();
+          renderUpgradeShop(`${item.title} purchased.`, shopWave);
         };
       });
 
@@ -1064,7 +981,6 @@
         startWave();
       };
     }
-
     function getMilestoneLevel(name, milestone) {
       return (weaponLevels[name] || 1) >= milestone;
     }
@@ -1085,8 +1001,6 @@
       return 0;
     }
 
-    // Allies target non-hypnotized enemies. Ordinary enemies target allies
-    // first when one is nearby; otherwise they continue targeting the player.
     function nearestEnemy(x, y, exclude = null, hypnotized = false) {
       let nearest = null;
       let nearestDistance = Infinity;
@@ -1112,8 +1026,6 @@
       enemy.hypnotized = true;
       enemy.burnTimer = 0;
       enemy.frozenTimer = 0;
-
-      // Hypnotized enemies are allies, so remove them from the wave count.
       markEnemyDefeatedForWave(enemy);
 
       for (const bullet of bullets) {
@@ -1134,23 +1046,17 @@
       if (!radius) return;
 
       const level = weaponLevels[bullet.weapon] || 1;
-      const burnExplosion = level >= 10;
-      const freezeExplosion =
-        bullet.weapon === "Grenade Launcher" && level >= 5;
+      const burns = level >= 10;
+      const freezes = bullet.weapon === "Grenade Launcher" && level >= 5;
 
       for (const enemy of [...enemies]) {
-        // Player explosions must not damage hypnotized allies.
         if (enemy.hypnotized) continue;
-
-        if (Math.hypot(enemy.x - bullet.x, enemy.y - bullet.y) > radius) {
-          continue;
-        }
+        if (Math.hypot(enemy.x - bullet.x, enemy.y - bullet.y) > radius) continue;
 
         enemy.hp -= bullet.damage * 0.55;
 
-        if (burnExplosion) applyBurn(enemy, BURN_DURATION);
-
-        if (freezeExplosion) {
+        if (burns) applyBurn(enemy, BURN_DURATION);
+        if (freezes) {
           enemy.frozenTimer = Math.max(enemy.frozenTimer || 0, FREEZE_DURATION);
         }
 
@@ -1185,7 +1091,7 @@
           penetrationsLeft:
             name === "Sniper"
               ? level >= 5 ? 5 : level >= 3 ? 2 : 0
-              : name === "AK-47" && level >= 3 ? 1 : 0,
+              : name === "AK-47" && level >= 3 && level < 15 ? 1 : 0,
           hitEnemies: new Set(),
           explosive: getExplosionRadius(name) > 0,
           homingStrength:
@@ -1201,7 +1107,6 @@
 
       enemies.splice(index, 1);
 
-      // Only non-allies can reduce the active wave count.
       if (!enemy.hypnotized && !enemy.countedAsDefeated) {
         markEnemyDefeatedForWave(enemy);
       }
@@ -1240,15 +1145,15 @@
           );
 
           if (child) {
-            scaleEnemyForWave(child, wave, Math.floor(wave / 10));
+            scaleEnemyForWave(child, wave);
             enemiesRemaining++;
           }
         }
       }
 
       if (enemy.type === "merger") {
-        const mergers = enemies.filter(item => item.type === "merger");
-        mergerPhase = mergers.length === 1 ? "hunting" : "gathering";
+        const mergerCount = enemies.filter(item => item.type === "merger").length;
+        mergerPhase = mergerCount === 1 ? "hunting" : "gathering";
       }
     }
 
@@ -1284,13 +1189,13 @@
         }
       }
 
-      const remaining = enemies.filter(enemy => enemy.type === "merger");
-      if (remaining.length === 1) mergerPhase = "hunting";
-      else if (remaining.length > 1) mergerPhase = "gathering";
+      const remaining = enemies.filter(enemy => enemy.type === "merger").length;
+      if (remaining === 1) mergerPhase = "hunting";
+      else if (remaining > 1) mergerPhase = "gathering";
     }
 
     function summonFromOverlord(enemy) {
-      const kindByOverlord = {
+      const summonTypes = {
         bossOverlord: "normal",
         rusherBossOverlord: "rusher",
         iceBossOverlord: "ice",
@@ -1298,7 +1203,7 @@
         motherBossOverlord: "mother"
       };
 
-      const kind = kindByOverlord[enemy.type];
+      const kind = summonTypes[enemy.type];
       if (!kind) return;
 
       const angle = Math.random() * Math.PI * 2;
@@ -1336,8 +1241,8 @@
       panel.querySelector("#restart-button").onclick = resetGame;
       panel.querySelector("#home-button").onclick = () => {
         runCoins = 0;
-        previewElement.innerHTML = "";
-        showAccountHome();
+        player = null;
+        showHomeScreen();
       };
     }
 
@@ -1369,12 +1274,12 @@
       if (gameover || choosingUpgrade || !player) return;
 
       const clearedWave = wave;
+      if (clearedWave % 5 === 0) openUpgradeShop(clearedWave);
+      else startWave();
+    }
 
-      if (clearedWave % 5 === 0) {
-        openUpgradeShop(clearedWave);
-      } else {
-        startWave();
-      }
+    function takePlayerDamage(amount) {
+      player.hp -= amount * (1 - runDamageResistance);
     }
 
     function update(dt) {
@@ -1387,7 +1292,6 @@
       const horizontal =
         Number(keys.has("d") || keys.has("ArrowRight")) -
         Number(keys.has("a") || keys.has("ArrowLeft"));
-
       const vertical =
         Number(keys.has("s") || keys.has("ArrowDown")) -
         Number(keys.has("w") || keys.has("ArrowUp"));
@@ -1400,9 +1304,11 @@
         player.y += vertical / length * player.speed * slow * dt;
       }
 
-      const half = player.size / 2;
-      player.x = Math.max(bounds.left + half, Math.min(bounds.right - half, player.x));
-      player.y = Math.max(bounds.top + half, Math.min(bounds.bottom - half, player.y));
+      const playerHalf = player.size / 2;
+      player.x = Math.max(bounds.left + playerHalf,
+        Math.min(bounds.right - playerHalf, player.x));
+      player.y = Math.max(bounds.top + playerHalf,
+        Math.min(bounds.bottom - playerHalf, player.y));
 
       for (let slot = 0; slot < 2; slot++) {
         cooldowns[slot] = Math.max(0, cooldowns[slot] - dt);
@@ -1427,17 +1333,12 @@
           }
 
           bullet.hitEnemies.add(enemy);
-
-          // Player bullets pass through allies without damaging them.
           if (enemy.hypnotized) continue;
 
           enemy.hp -= bullet.damage;
           const level = weaponLevels[bullet.weapon] || 1;
 
-          if (
-            (bullet.weapon === "Pistol" || bullet.weapon === "Shotgun") &&
-            level >= 3
-          ) {
+          if (["Pistol", "Shotgun"].includes(bullet.weapon) && level >= 3) {
             applyBurn(enemy, BURN_DURATION);
           }
 
@@ -1495,49 +1396,43 @@
           }
         }
 
-        let target = null;
-
-        if (enemy.hypnotized) {
-          // Hypnotized allies attack only non-hypnotized enemies.
-          target = nearestEnemy(enemy.x, enemy.y, enemy, false);
-        } else {
-          // Ordinary enemies can attack hypnotized allies.
-          target = nearestEnemy(enemy.x, enemy.y, enemy, true);
-        }
+        const target = enemy.hypnotized
+          ? nearestEnemy(enemy.x, enemy.y, enemy, false)
+          : nearestEnemy(enemy.x, enemy.y, enemy, true);
 
         enemy.attackTarget = target;
 
         if (target) {
           const tx = target.x - enemy.x;
           const ty = target.y - enemy.y;
-          const targetDistance = Math.max(1, Math.hypot(tx, ty));
+          const distanceToTarget = Math.max(1, Math.hypot(tx, ty));
 
-          if (enemy.type === "tank") enemy.facingAngle = Math.atan2(ty, tx);
+          if (enemy.type === "tank") {
+            enemy.facingAngle = Math.atan2(ty, tx);
+          }
 
-          if (targetDistance > (enemy.size + target.size) / 2) {
+          if (distanceToTarget > (enemy.size + target.size) / 2) {
             const speed = enemy.frozenTimer > 0 ? 0 : enemy.speed;
-            enemy.x += tx / targetDistance * speed * dt;
-            enemy.y += ty / targetDistance * speed * dt;
+            enemy.x += tx / distanceToTarget * speed * dt;
+            enemy.y += ty / distanceToTarget * speed * dt;
           } else if (enemy.hitCooldown <= 0) {
             target.hp -= enemy.damage;
             enemy.hitCooldown = 0.65;
-
-            if (target.hp <= 0) {
-              killEnemy(target);
-            }
+            if (target.hp <= 0) killEnemy(target);
           }
 
           continue;
         }
 
-        // Allies without an enemy target do not chase or attack the player.
         if (enemy.hypnotized) continue;
 
         const dx = player.x - enemy.x;
         const dy = player.y - enemy.y;
         const distance = Math.max(1, Math.hypot(dx, dy));
 
-        if (enemy.type === "tank") enemy.facingAngle = Math.atan2(dy, dx);
+        if (enemy.type === "tank") {
+          enemy.facingAngle = Math.atan2(dy, dx);
+        }
 
         if (isOverlord(enemy)) {
           enemy.dashCooldown -= dt;
@@ -1566,8 +1461,11 @@
             Math.min(bounds.bottom - bossHalf, enemy.y));
 
           const summoningBosses = [
-            "bossOverlord", "rusherBossOverlord", "iceBossOverlord",
-            "flameBossOverlord", "motherBossOverlord"
+            "bossOverlord",
+            "rusherBossOverlord",
+            "iceBossOverlord",
+            "flameBossOverlord",
+            "motherBossOverlord"
           ];
 
           if (summoningBosses.includes(enemy.type)) {
@@ -1580,13 +1478,13 @@
             }
           }
         } else if (enemy.type === "merger" && mergerPhase === "gathering") {
-          const cx = mergerCenter.x - enemy.x;
-          const cy = mergerCenter.y - enemy.y;
-          const centerDistance = Math.max(1, Math.hypot(cx, cy));
+          const dxCenter = mergerCenter.x - enemy.x;
+          const dyCenter = mergerCenter.y - enemy.y;
+          const centerDistance = Math.max(1, Math.hypot(dxCenter, dyCenter));
           const speed = enemy.frozenTimer > 0 ? 0 : enemyTypes.rusher.speed;
 
-          enemy.x += cx / centerDistance * speed * dt;
-          enemy.y += cy / centerDistance * speed * dt;
+          enemy.x += dxCenter / centerDistance * speed * dt;
+          enemy.y += dyCenter / centerDistance * speed * dt;
         } else {
           const speed = enemy.frozenTimer > 0
             ? 0
@@ -1600,16 +1498,16 @@
 
         const playerRadius = player.size / 2 * PLAYER_HITBOX_SCALE;
         const enemyRadius = enemy.size / 2 * ENEMY_HITBOX_SCALE;
-        const centerDistance = Math.hypot(player.x - enemy.x, player.y - enemy.y);
-        const touching = centerDistance <= playerRadius + enemyRadius;
+        const playerDistance = Math.hypot(player.x - enemy.x, player.y - enemy.y);
+        const touching = playerDistance <= playerRadius + enemyRadius;
 
         if (
           enemy.type === "flame" &&
-          centerDistance <= FLAME_RANGE &&
+          playerDistance <= FLAME_RANGE &&
           enemy.burnCooldown <= 0 &&
           playerDamageCooldown <= 0
         ) {
-          player.hp -= FLAME_DAMAGE;
+          takePlayerDamage(FLAME_DAMAGE);
           enemy.burnCooldown = FLAME_COOLDOWN;
           playerDamageCooldown = 0.45;
         }
@@ -1623,9 +1521,10 @@
           enemy.hitCooldown <= 0 &&
           playerDamageCooldown <= 0
         ) {
-          player.hp -= enemy.damage;
+          takePlayerDamage(enemy.damage);
           enemy.hitCooldown = isOverlord(enemy) ? 0.8 : 0.65;
           playerDamageCooldown = 0.45;
+
           if (enemy.type === "ice") slowTimer = FREEZE_DURATION;
         }
       }
@@ -1660,7 +1559,6 @@
         return;
       }
 
-      // Recalculate using only hostile enemies; allies never count.
       enemiesRemaining = enemies.filter(enemy => !enemy.hypnotized).length;
 
       if (waveTimer <= 0 || enemiesRemaining === 0) {
@@ -1692,12 +1590,10 @@
       gradient.addColorStop(.78, "rgba(255,190,30,.16)");
       gradient.addColorStop(1, "rgba(255,190,30,0)");
 
-      ctx.save();
       ctx.fillStyle = gradient;
       ctx.beginPath();
       ctx.arc(enemy.x, enemy.y, glowRadius, 0, Math.PI * 2);
       ctx.fill();
-      ctx.restore();
     }
 
     function drawTank(enemy, color) {
@@ -1727,6 +1623,7 @@
       const barrelLength = size * 0.48;
       const barrelThickness = size * 0.22;
       const barrelStart = height * 0.55;
+
       ctx.fillRect(barrelStart, -barrelThickness / 2, barrelLength, barrelThickness);
       ctx.strokeRect(barrelStart, -barrelThickness / 2, barrelLength, barrelThickness);
       ctx.restore();
@@ -1740,27 +1637,36 @@
       ctx.fillRect(0, 0, W, 58);
       ctx.strokeStyle = "#141914";
       ctx.lineWidth = 3;
-      ctx.strokeRect(bounds.left, bounds.top,
-        bounds.right - bounds.left, bounds.bottom - bounds.top);
+      ctx.strokeRect(
+        bounds.left,
+        bounds.top,
+        bounds.right - bounds.left,
+        bounds.bottom - bounds.top
+      );
 
       drawText("GLOOP SURVIVAL", 18, 37, "#f5d741");
 
-      if (account) {
-        drawText(`Player: ${accountName}`, 250, 37);
-        drawText(`Mode: ${selectedMode}`, 390, 37, "#ffe978", 16);
-        drawText(`Wave: ${wave}`, 530, 37);
-        drawText(`Time: ${Math.ceil(waveTimer)}s`, 605, 37, "#ffe978");
-        drawText(`Coins: ${runCoins}`, 710, 37, "#f5d741");
+      if (player) {
+        drawText(`Mode: ${selectedMode}`, 250, 37, "#ffe978", 16);
+        drawText(`Wave: ${wave}`, 390, 37);
+        drawText(`Time: ${Math.ceil(waveTimer)}s`, 465, 37, "#ffe978");
+        drawText(`Coins: ${runCoins}`, 570, 37, "#f5d741");
 
-        if (player) {
-          ctx.fillStyle = "#351b1b";
-          ctx.fillRect(790, 17, 190, 18);
-          ctx.fillStyle = "#dc4137";
-          ctx.fillRect(790, 17, 190 * Math.max(0, player.hp / player.maxHp), 18);
-          ctx.strokeStyle = "#f5f5f5";
-          ctx.strokeRect(790, 17, 190, 18);
-          drawText(`HP ${Math.ceil(player.hp)}/${player.maxHp}`,
-            790, 53, "#f5f5f5", 14);
+        ctx.fillStyle = "#351b1b";
+        ctx.fillRect(700, 17, 280, 18);
+        ctx.fillStyle = "#dc4137";
+        ctx.fillRect(700, 17, 280 * Math.max(0, player.hp / player.maxHp), 18);
+        ctx.strokeStyle = "#f5f5f5";
+        ctx.strokeRect(700, 17, 280, 18);
+
+        drawText(`HP ${Math.ceil(player.hp)}/${player.maxHp}`,
+          700, 53, "#f5f5f5", 14);
+
+        if (runDamageResistance > 0) {
+          drawText(
+            `Resistance: ${Math.round(runDamageResistance * 100)}%`,
+            980, 53, "#ffe978", 14, "right"
+          );
         }
       }
 
@@ -1919,7 +1825,7 @@
 
     canvas.addEventListener("contextmenu", event => event.preventDefault());
 
-    showHome();
+    showHomeScreen();
     requestAnimationFrame(frame);
   })();
   </script>
