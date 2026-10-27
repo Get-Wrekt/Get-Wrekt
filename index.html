@@ -216,6 +216,27 @@
     }
 
     .leaderboard-box h2 { text-align: center; margin-top: 0; }
+    .leaderboard-difficulty-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 6px;
+      margin: 12px 0 16px;
+    }
+    .leaderboard-difficulty-tabs button {
+      flex: 1 1 auto;
+      padding: 8px 10px;
+      border-width: 1px;
+      font-size: 13px;
+    }
+    .leaderboard-difficulty-tabs button[aria-pressed="false"] {
+      color: #f5f5f5;
+      background: #293329;
+      border-color: #71806b;
+    }
+    .leaderboard-difficulty-tabs button[aria-pressed="false"]:hover {
+      background: #3b4939;
+    }
     .nickname-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
     .nickname-row input {
       flex: 1 1 180px;
@@ -288,6 +309,16 @@
       return nickname;
     }
 
+    const leaderboardDifficulties = ["Very Easy", "Easy", "Medium", "Hard", "Impossible"];
+    let selectedLeaderboardDifficulty = "Very Easy";
+
+    function updateLeaderboardDifficultyTabs() {
+      panel.querySelectorAll("[data-leaderboard-difficulty]").forEach(button => {
+        const isSelected = button.dataset.leaderboardDifficulty === selectedLeaderboardDifficulty;
+        button.setAttribute("aria-pressed", String(isSelected));
+      });
+    }
+
     async function loadLeaderboard() {
       const status = panel.querySelector("#leaderboard-status");
       const body = panel.querySelector("#leaderboard-rows");
@@ -303,14 +334,18 @@
           .from("leaderboard")
           .select("player_name, wave_difficulty, coins, waves, created_at");
         if (error) throw error;
-        // Rank locally: highest waves first, then highest coins, then newest run.
-        const rankedData = (data || []).sort((a, b) =>
-          (Number(b.waves) || 0) - (Number(a.waves) || 0) ||
-          (Number(b.coins) || 0) - (Number(a.coins) || 0) ||
-          new Date(b.created_at || 0) - new Date(a.created_at || 0)
-        ).slice(0, 10);
+        // Each tab shows personal bests for one difficulty only.
+        // Ranking: highest waves, then highest coins, then newest record.
+        const rankedData = (data || [])
+          .filter(entry => entry.wave_difficulty === selectedLeaderboardDifficulty)
+          .sort((a, b) =>
+            (Number(b.waves) || 0) - (Number(a.waves) || 0) ||
+            (Number(b.coins) || 0) - (Number(a.coins) || 0) ||
+            new Date(b.created_at || 0) - new Date(a.created_at || 0)
+          )
+          .slice(0, 10);
         if (rankedData.length === 0) {
-          body.innerHTML = '<tr><td class="leaderboard-empty" colspan="6">No scores yet. Be the first to play!</td></tr>';
+          body.innerHTML = `<tr><td class="leaderboard-empty" colspan="6">No ${escapeHtml(selectedLeaderboardDifficulty)} records yet. Be the first to play!</td></tr>`;
         } else {
           body.innerHTML = rankedData.map((entry, index) => `
             <tr>
@@ -323,7 +358,7 @@
             </tr>
           `).join("");
         }
-        status.textContent = "Top 10 runs by waves, then coins collected as the tie-breaker";
+        status.textContent = `Top 10 personal bests for ${selectedLeaderboardDifficulty} — ranked by waves, then coins`;
       } catch (error) {
         console.error("Leaderboard load failed:", error);
         status.textContent = "Could not load scores. Check the Supabase URL, key, table, and access policies.";
@@ -596,6 +631,9 @@
         <div class="home-layout">
           <div class="leaderboard-box">
           <h2>🏆 LEADERBOARD</h2>
+          <div class="leaderboard-difficulty-tabs" role="group" aria-label="Choose leaderboard difficulty">
+            ${leaderboardDifficulties.map(difficulty => `<button type="button" data-leaderboard-difficulty="${difficulty}" aria-pressed="${difficulty === selectedLeaderboardDifficulty}">${difficulty.toUpperCase()}</button>`).join("")}
+          </div>
           <label for="nickname-input">Your nickname (up to 20 characters)</label>
           <div class="nickname-row">
             <input id="nickname-input" maxlength="20" autocomplete="nickname" placeholder="Enter a nickname" value="${escapeHtml(getSavedNickname())}">
@@ -622,6 +660,14 @@
       panel.classList.add("home-panel");
 
       const nicknameInput = panel.querySelector("#nickname-input");
+      panel.querySelectorAll("[data-leaderboard-difficulty]").forEach(button => {
+        button.onclick = () => {
+          selectedLeaderboardDifficulty = button.dataset.leaderboardDifficulty;
+          updateLeaderboardDifficultyTabs();
+          loadLeaderboard();
+        };
+      });
+      updateLeaderboardDifficultyTabs();
       panel.querySelector("#save-nickname-button").onclick = () => {
         const nickname = saveNickname(nicknameInput.value);
         nicknameInput.value = nickname;
