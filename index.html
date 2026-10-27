@@ -343,17 +343,24 @@
         return;
       }
       try {
-        const { error } = await supabaseClient.from("leaderboard").insert({
-          player_name: nickname,
-          wave_difficulty: selectedMode,
-          coins: Math.max(0, Math.floor(runCoins)),
-          waves: Math.max(0, Math.floor(wave))
+        // The database function keeps one personal-best row per exact nickname.
+        // It only replaces the saved row for more waves, or equal waves with more coins.
+        const { data: improved, error } = await supabaseClient.rpc("submit_player_best", {
+          p_player_name: nickname,
+          p_wave_difficulty: selectedMode,
+          p_coins: Math.max(0, Math.floor(runCoins)),
+          p_waves: Math.max(0, Math.floor(wave))
         });
         if (error) throw error;
-        if (result) result.textContent = "Score submitted to the leaderboard!";
+        if (result) {
+          result.textContent = improved
+            ? "Personal best saved to the leaderboard!"
+            : "Personal best kept — this run did not beat your saved record.";
+        }
+        await loadLeaderboard();
       } catch (error) {
         console.error("Score submission failed:", error);
-        if (result) result.textContent = "Could not submit score. Check the Supabase connection and table policies.";
+        if (result) result.textContent = "Could not save your personal best. Check the Supabase submit_player_best function and permissions.";
       }
     }
 
