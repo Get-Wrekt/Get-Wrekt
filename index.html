@@ -294,14 +294,14 @@
       if (!status || !body) return;
       if (!supabaseClient) {
         status.textContent = "Leaderboard not connected yet. Add your Supabase URL and publishable key in the HTML file.";
-        body.innerHTML = '<tr><td class="leaderboard-empty" colspan="5">Waiting for Supabase setup</td></tr>';
+        body.innerHTML = '<tr><td class="leaderboard-empty" colspan="6">Waiting for Supabase setup</td></tr>';
         return;
       }
       status.textContent = "Loading leaderboard…";
       try {
         const { data, error } = await supabaseClient
           .from("leaderboard")
-          .select("player_name, coins, waves, created_at");
+          .select("player_name, wave_difficulty, coins, waves, created_at");
         if (error) throw error;
         // Rank locally: highest waves first, then highest coins, then newest run.
         const rankedData = (data || []).sort((a, b) =>
@@ -310,12 +310,13 @@
           new Date(b.created_at || 0) - new Date(a.created_at || 0)
         ).slice(0, 10);
         if (rankedData.length === 0) {
-          body.innerHTML = '<tr><td class="leaderboard-empty" colspan="5">No scores yet. Be the first to play!</td></tr>';
+          body.innerHTML = '<tr><td class="leaderboard-empty" colspan="6">No scores yet. Be the first to play!</td></tr>';
         } else {
           body.innerHTML = rankedData.map((entry, index) => `
             <tr>
               <td>${index + 1}</td>
               <td>${escapeHtml(entry.player_name)}</td>
+              <td>${escapeHtml(entry.wave_difficulty || "Unknown")}</td>
               <td>${Number(entry.waves) || 0}</td>
               <td>${Number(entry.coins) || 0}</td>
               <td>${entry.created_at ? new Date(entry.created_at).toLocaleDateString() : "—"}</td>
@@ -326,7 +327,7 @@
       } catch (error) {
         console.error("Leaderboard load failed:", error);
         status.textContent = "Could not load scores. Check the Supabase URL, key, table, and access policies.";
-        body.innerHTML = '<tr><td class="leaderboard-empty" colspan="5">Leaderboard temporarily unavailable</td></tr>';
+        body.innerHTML = '<tr><td class="leaderboard-empty" colspan="6">Leaderboard temporarily unavailable</td></tr>';
       }
     }
 
@@ -344,6 +345,7 @@
       try {
         const { error } = await supabaseClient.from("leaderboard").insert({
           player_name: nickname,
+          wave_difficulty: selectedMode,
           coins: Math.max(0, Math.floor(runCoins)),
           waves: Math.max(0, Math.floor(wave))
         });
@@ -593,8 +595,8 @@
             <button id="save-nickname-button" type="button">SAVE NAME</button>
           </div>
           <table class="leaderboard-table">
-            <thead><tr><th>#</th><th>Player</th><th>Waves</th><th>Coins (tie-breaker)</th><th>Date</th></tr></thead>
-            <tbody id="leaderboard-rows"><tr><td class="leaderboard-empty" colspan="5">Loading…</td></tr></tbody>
+            <thead><tr><th>#</th><th>Player</th><th>Difficulty</th><th>Waves</th><th>Coins (tie-breaker)</th><th>Date</th></tr></thead>
+            <tbody id="leaderboard-rows"><tr><td class="leaderboard-empty" colspan="6">Loading…</td></tr></tbody>
           </table>
           <p id="leaderboard-status" role="status">Loading leaderboard…</p>
           <button id="refresh-leaderboard-button" type="button">REFRESH SCORES</button>
