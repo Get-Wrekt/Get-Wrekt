@@ -92,6 +92,21 @@
       border-radius: 12px;
     }
 
+    /* Home screen: leaderboard on the left, original menu on the right. */
+    #panel.home-panel {
+      width: min(1200px, calc(100vw - 24px));
+      padding: 18px;
+    }
+    .home-layout {
+      display: grid;
+      grid-template-columns: minmax(300px, .95fr) minmax(320px, 1.05fr);
+      align-items: center;
+      gap: 26px;
+      text-align: center;
+    }
+    .home-main { min-width: 0; padding: 10px 14px; }
+    .home-main h1 { margin-top: 0; }
+
     h1, h2 { color: #f5d741; }
     h2 { margin-bottom: 8px; }
 
@@ -188,7 +203,45 @@
     .tutorial-content h2 { margin-bottom: 4px; }
     .tutorial-content ul { padding-left: 24px; }
 
-    @media (max-width: 600px) {
+
+    .leaderboard-box {
+      width: 100%;
+      max-width: 680px;
+      margin: 18px auto;
+      padding: 14px;
+      text-align: left;
+      border: 2px solid #71806b;
+      border-radius: 8px;
+      background: #293329;
+    }
+
+    .leaderboard-box h2 { text-align: center; margin-top: 0; }
+    .nickname-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .nickname-row input {
+      flex: 1 1 180px;
+      min-width: 0;
+      padding: 10px;
+      border: 1px solid #71806b;
+      border-radius: 5px;
+      background: #141914;
+      color: #fff;
+      font: inherit;
+    }
+    #leaderboard-status { min-height: 20px; margin: 8px 0; color: #ffe978; font-size: 13px; }
+    .leaderboard-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .leaderboard-table th, .leaderboard-table td { padding: 8px 5px; border-bottom: 1px solid #53614e; text-align: right; }
+    .leaderboard-table th:first-child, .leaderboard-table td:first-child,
+    .leaderboard-table th:nth-child(2), .leaderboard-table td:nth-child(2) { text-align: left; }
+    .leaderboard-empty { text-align: center !important; color: #cbd5c0; }
+
+    @media (max-width: 700px) {
+      #panel.home-panel { width: min(560px, calc(100vw - 16px)); padding: 12px; }
+      .home-layout { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+      .home-main { grid-row: 1; padding: 4px; }
+      .home-layout .leaderboard-box { grid-row: 2; margin: 8px 0; }
+      .leaderboard-box { padding: 10px; }
+      .leaderboard-table { font-size: 12px; }
+      .leaderboard-table th, .leaderboard-table td { padding: 6px 3px; }
       #panel { padding: 14px; }
       .shop-layout { grid-template-columns: 1fr; }
       .inventory { position: static; }
@@ -206,9 +259,101 @@
     </section>
   </main>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
   (() => {
     "use strict";
+
+    // Add your Supabase project's URL and publishable (anon) key here.
+    // Supabase Dashboard -> Project Settings -> API.
+    // NEVER put a secret key or service_role key in this HTML file.
+    const SUPABASE_URL = "https://pdtswzuxjosacoowyixa.supabase.co";
+    const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_C9ufs6nEsJnGIYPnUD2UxQ_UtdJvSJc";
+    const supabaseConfigured =
+      SUPABASE_URL.startsWith("https://") &&
+      !SUPABASE_URL.includes("PASTE_YOUR") &&
+      !SUPABASE_PUBLISHABLE_KEY.includes("PASTE_YOUR");
+    const supabaseClient = supabaseConfigured && window.supabase
+      ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
+      : null;
+
+    function getSavedNickname() {
+      try { return localStorage.getItem("gloopSurvivalNickname") || ""; }
+      catch { return ""; }
+    }
+
+    function saveNickname(value) {
+      const nickname = String(value || "").trim().slice(0, 20);
+      try { localStorage.setItem("gloopSurvivalNickname", nickname); } catch {}
+      return nickname;
+    }
+
+    async function loadLeaderboard() {
+      const status = panel.querySelector("#leaderboard-status");
+      const body = panel.querySelector("#leaderboard-rows");
+      if (!status || !body) return;
+      if (!supabaseClient) {
+        status.textContent = "Leaderboard not connected yet. Add your Supabase URL and publishable key in the HTML file.";
+        body.innerHTML = '<tr><td class="leaderboard-empty" colspan="5">Waiting for Supabase setup</td></tr>';
+        return;
+      }
+      status.textContent = "Loading leaderboard…";
+      try {
+        const { data, error } = await supabaseClient
+          .from("leaderboard")
+          .select("player_name, coins, waves, created_at");
+        if (error) throw error;
+        // Rank locally: highest waves first, then highest coins, then newest run.
+        const rankedData = (data || []).sort((a, b) =>
+          (Number(b.waves) || 0) - (Number(a.waves) || 0) ||
+          (Number(b.coins) || 0) - (Number(a.coins) || 0) ||
+          new Date(b.created_at || 0) - new Date(a.created_at || 0)
+        ).slice(0, 10);
+        if (rankedData.length === 0) {
+          body.innerHTML = '<tr><td class="leaderboard-empty" colspan="5">No scores yet. Be the first to play!</td></tr>';
+        } else {
+          body.innerHTML = rankedData.map((entry, index) => `
+            <tr>
+              <td>${index + 1}</td>
+              <td>${escapeHtml(entry.player_name)}</td>
+              <td>${Number(entry.waves) || 0}</td>
+              <td>${Number(entry.coins) || 0}</td>
+              <td>${entry.created_at ? new Date(entry.created_at).toLocaleDateString() : "—"}</td>
+            </tr>
+          `).join("");
+        }
+        status.textContent = "Top 10 runs by waves, then coins collected as the tie-breaker";
+      } catch (error) {
+        console.error("Leaderboard load failed:", error);
+        status.textContent = "Could not load scores. Check the Supabase URL, key, table, and access policies.";
+        body.innerHTML = '<tr><td class="leaderboard-empty" colspan="5">Leaderboard temporarily unavailable</td></tr>';
+      }
+    }
+
+    async function submitRunScore() {
+      const nickname = getSavedNickname();
+      const result = panel.querySelector("#score-submit-status");
+      if (!nickname) {
+        if (result) result.textContent = "Score not submitted: choose a nickname on the home screen before your next run.";
+        return;
+      }
+      if (!supabaseClient) {
+        if (result) result.textContent = "Score not submitted yet: Supabase connection details still need to be added.";
+        return;
+      }
+      try {
+        const { error } = await supabaseClient.from("leaderboard").insert({
+          player_name: nickname,
+          coins: Math.max(0, Math.floor(runCoins)),
+          waves: Math.max(0, Math.floor(wave))
+        });
+        if (error) throw error;
+        if (result) result.textContent = "Score submitted to the leaderboard!";
+      } catch (error) {
+        console.error("Score submission failed:", error);
+        if (result) result.textContent = "Could not submit score. Check the Supabase connection and table policies.";
+      }
+    }
 
     const canvas = document.querySelector("#game");
     const overlay = document.querySelector("#overlay");
@@ -417,6 +562,7 @@
     }
 
     function showOverlay(html) {
+      panel.classList.remove("home-panel");
       panel.innerHTML = html;
       overlay.style.display = "grid";
     }
@@ -438,16 +584,49 @@
       previewElement.innerHTML = "";
 
       showOverlay(`
-        <h1>GLOOP SURVIVAL</h1>
-        <p>Survive the waves. Upgrade your weapons. Defeat the Gloops.</p>
-        <div class="actions">
-          <button id="play-button">PLAY</button>
-          <button id="tutorial-button">TUTORIAL</button>
+        <div class="home-layout">
+          <div class="leaderboard-box">
+          <h2>🏆 LEADERBOARD</h2>
+          <label for="nickname-input">Your nickname (up to 20 characters)</label>
+          <div class="nickname-row">
+            <input id="nickname-input" maxlength="20" autocomplete="nickname" placeholder="Enter a nickname" value="${escapeHtml(getSavedNickname())}">
+            <button id="save-nickname-button" type="button">SAVE NAME</button>
+          </div>
+          <table class="leaderboard-table">
+            <thead><tr><th>#</th><th>Player</th><th>Waves</th><th>Coins (tie-breaker)</th><th>Date</th></tr></thead>
+            <tbody id="leaderboard-rows"><tr><td class="leaderboard-empty" colspan="5">Loading…</td></tr></tbody>
+          </table>
+          <p id="leaderboard-status" role="status">Loading leaderboard…</p>
+          <button id="refresh-leaderboard-button" type="button">REFRESH SCORES</button>
+          </div>
+
+          <div class="home-main">
+            <h1>GLOOP SURVIVAL</h1>
+            <p>Survive the waves. Upgrade your weapons. Defeat the Gloops.</p>
+            <div class="actions">
+              <button id="play-button">PLAY</button>
+              <button id="tutorial-button">TUTORIAL</button>
+            </div>
+          </div>
         </div>
       `);
+      panel.classList.add("home-panel");
 
-      panel.querySelector("#play-button").onclick = showModeSelect;
+      const nicknameInput = panel.querySelector("#nickname-input");
+      panel.querySelector("#save-nickname-button").onclick = () => {
+        const nickname = saveNickname(nicknameInput.value);
+        nicknameInput.value = nickname;
+        const status = panel.querySelector("#leaderboard-status");
+        if (status) status.textContent = nickname ? `Nickname saved: ${nickname}` : "Please enter a nickname.";
+      };
+      nicknameInput.onchange = () => saveNickname(nicknameInput.value);
+      panel.querySelector("#refresh-leaderboard-button").onclick = loadLeaderboard;
+      panel.querySelector("#play-button").onclick = () => {
+        saveNickname(nicknameInput.value);
+        showModeSelect();
+      };
       panel.querySelector("#tutorial-button").onclick = showTutorial;
+      loadLeaderboard();
     }
 
     function showModeSelect() {
@@ -1244,6 +1423,11 @@
         player = null;
         showHomeScreen();
       };
+      const scoreStatus = document.createElement("p");
+      scoreStatus.id = "score-submit-status";
+      scoreStatus.setAttribute("role", "status");
+      panel.appendChild(scoreStatus);
+      submitRunScore();
     }
 
     function updateBulletHoming(bullet, dt) {
