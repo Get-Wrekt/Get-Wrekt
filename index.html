@@ -120,6 +120,22 @@
       font-size: 12px;
       letter-spacing: 1px;
     }
+    .season-label {
+      margin: 0 0 8px;
+      color: #a9ff62;
+      font-size: 12px;
+      font-weight: bold;
+      letter-spacing: 2px;
+      text-shadow: 0 0 10px rgba(123, 255, 65, .35);
+    }
+    button[data-mode="Apocalypse"] {
+      color: #f6e8ff;
+      background: #54246b;
+      border-color: #c879ff;
+    }
+    button[data-mode="Apocalypse"]:hover:not(:disabled) {
+      background: #71328d;
+    }
 
     h1, h2 { color: #f5d741; }
     h2 { margin-bottom: 8px; }
@@ -323,7 +339,7 @@
       return nickname;
     }
 
-    const leaderboardDifficulties = ["Very Easy", "Easy", "Medium", "Hard", "Impossible"];
+    const leaderboardDifficulties = ["Very Easy", "Easy", "Medium", "Hard", "Impossible", "Apocalypse"];
     let selectedLeaderboardDifficulty = "Very Easy";
 
     function updateLeaderboardDifficultyTabs() {
@@ -444,7 +460,9 @@
       "Easy": { waveDuration: 15 },
       "Medium": { waveDuration: 13 },
       "Hard": { waveDuration: 9 },
-      "Impossible": { waveDuration: 3 }
+      "Impossible": { waveDuration: 3 },
+      // Apocalypse is a special seasonal mode with its own leaderboard.
+      "Apocalypse": { waveDuration: 8 }
     };
 
     let selectedMode = "Medium";
@@ -455,7 +473,8 @@
       "Easy": { firstPercent: 90, firstIncrement: 60 },
       "Medium": { firstPercent: 100, firstIncrement: 80 },
       "Hard": { firstPercent: 120, firstIncrement: 90 },
-      "Impossible": { firstPercent: 150, firstIncrement: 100 }
+      "Impossible": { firstPercent: 150, firstIncrement: 100 },
+      "Apocalypse": { firstPercent: 170, firstIncrement: 110 }
     };
 
     function getBossHealthPercent(bossNumber, mode = selectedMode) {
@@ -584,6 +603,8 @@
     let bullets = [];
     let coins = [];
     let cheeses = [];
+    let toxicTrails = [];
+    let apocalypseTrailDamageCooldown = 0;
     let runWeapons = [];
     let weaponLevels = {};
     let wave = 1;
@@ -662,6 +683,7 @@
           </div>
 
           <div class="home-main">
+            <p class="season-label">SEASON 1: GLOOP APOCALYPSE</p>
             <h1>GLOOP SURVIVAL</h1>
             <p>Survive the waves. Upgrade your weapons. Defeat the Gloops.</p>
             <div class="actions">
@@ -743,6 +765,7 @@
 
           <h2>Waves and survival</h2>
           <p>Enemies chase and attack you. Survive until the wave timer ends or defeat all enemies. Avoid touching enemies, collect dropped coins, and pick up cheese to restore health.</p>
+          <p><strong>Apocalypse Mode:</strong> basic Gloops become corrupted and leave short-lived toxic trails that deal 3 damage per tick. Candy canes replace cheese and restore 50 health.</p>
 
           <h2>Enemies</h2>
           <ul>
@@ -832,7 +855,7 @@
           <div class="preview-enemy">
             <span class="gloop-icon"
                   style="background:${enemyTypes[enemy.type].color}"></span>
-            <span>${escapeHtml(enemyNames[enemy.type])} × ${enemy.count}</span>
+            <span>${escapeHtml(selectedMode === "Apocalypse" && enemy.type === "normal" ? "Corrupted Gloop" : enemyNames[enemy.type])} × ${enemy.count}</span>
           </div>
         `).join("")}
       `;
@@ -876,7 +899,10 @@
         dashCooldown: 2.5,
         dashTime: 0,
         dashVx: 0,
-        dashVy: 0
+        dashVy: 0,
+        // Only basic Gloops are corrupted in Apocalypse Mode.
+        isCorrupted: selectedMode === "Apocalypse" && kind === "normal",
+        trailTimer: 0.15 + Math.random() * 0.2
       };
 
       enemies.push(enemy);
@@ -962,6 +988,8 @@
       bullets = [];
       coins = [];
       cheeses = [];
+      toxicTrails = [];
+      apocalypseTrailDamageCooldown = 0;
       wave = 1;
       waveTimer = waveDuration;
       enemiesRemaining = 0;
@@ -1555,6 +1583,11 @@
       waveTimer = Math.max(0, waveTimer - dt);
       slowTimer = Math.max(0, slowTimer - dt);
       playerDamageCooldown = Math.max(0, playerDamageCooldown - dt);
+      apocalypseTrailDamageCooldown = Math.max(0, apocalypseTrailDamageCooldown - dt);
+      for (const trail of [...toxicTrails]) {
+        trail.life -= dt;
+        if (trail.life <= 0) toxicTrails.splice(toxicTrails.indexOf(trail), 1);
+      }
 
       const horizontal =
         Number(keys.has("d") || keys.has("ArrowRight")) -
@@ -1763,6 +1796,15 @@
           enemy.y += dy / distance * speed * dt;
         }
 
+        // In Apocalypse Mode, corrupted basic Gloops periodically leave damaging trails.
+        if (selectedMode === "Apocalypse" && enemy.isCorrupted) {
+          enemy.trailTimer -= dt;
+          if (enemy.trailTimer <= 0) {
+            toxicTrails.push({ x: enemy.x, y: enemy.y, life: 0.7, maxLife: 0.7 });
+            enemy.trailTimer = 0.32;
+          }
+        }
+
         const playerRadius = player.size / 2 * PLAYER_HITBOX_SCALE;
         const enemyRadius = enemy.size / 2 * ENEMY_HITBOX_SCALE;
         const playerDistance = Math.hypot(player.x - enemy.x, player.y - enemy.y);
@@ -1796,6 +1838,16 @@
         }
       }
 
+      if (selectedMode === "Apocalypse" && apocalypseTrailDamageCooldown <= 0) {
+        const standingInToxicTrail = toxicTrails.some(trail =>
+          Math.hypot(player.x - trail.x, player.y - trail.y) < player.size / 2 + 10
+        );
+        if (standingInToxicTrail) {
+          takePlayerDamage(3);
+          apocalypseTrailDamageCooldown = 0.5;
+        }
+      }
+
       mergeTouchingMergers();
 
       for (const coin of [...coins]) {
@@ -1813,7 +1865,8 @@
         cheese.life -= dt;
 
         if (Math.hypot(player.x - cheese.x, player.y - cheese.y) < player.size / 2 + 14) {
-          player.hp = Math.min(player.maxHp, player.hp + 30);
+          const healingAmount = selectedMode === "Apocalypse" ? 50 : 30;
+          player.hp = Math.min(player.maxHp, player.hp + healingAmount);
           cheeses.splice(cheeses.indexOf(cheese), 1);
         } else if (cheese.life <= 0) {
           cheeses.splice(cheeses.indexOf(cheese), 1);
@@ -1897,8 +1950,22 @@
     }
 
     function draw() {
-      ctx.fillStyle = "#5c9b41";
+      ctx.fillStyle = selectedMode === "Apocalypse" ? "#252033" : "#5c9b41";
       ctx.fillRect(0, 0, W, H);
+      if (selectedMode === "Apocalypse") {
+        // Subtle toxic patches give the special mode a different atmosphere.
+        ctx.save();
+        ctx.globalAlpha = 0.24;
+        for (let i = 0; i < 9; i++) {
+          const px = 70 + ((i * 137) % (W - 140));
+          const py = 100 + ((i * 83) % (H - 150));
+          ctx.fillStyle = i % 2 ? "#71358c" : "#78d936";
+          ctx.beginPath();
+          ctx.ellipse(px, py, 22 + (i % 3) * 7, 10 + (i % 4) * 3, i * 0.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
 
       ctx.fillStyle = "#141914";
       ctx.fillRect(0, 0, W, 58);
@@ -1914,7 +1981,10 @@
       drawText("GLOOP SURVIVAL", 18, 37, "#f5d741");
 
       if (player) {
-        drawText(`Mode: ${selectedMode}`, 250, 37, "#ffe978", 16);
+        drawText(`Mode: ${selectedMode}`, 250, 37, selectedMode === "Apocalypse" ? "#c879ff" : "#ffe978", 16);
+        if (selectedMode === "Apocalypse") {
+          drawText("SEASON 1", 250, 53, "#a9ff62", 11);
+        }
         drawText(`Wave: ${wave}`, 390, 37);
         drawText(`Time: ${Math.ceil(waveTimer)}s`, 465, 37, "#ffe978");
         drawText(`Coins: ${runCoins}`, 570, 37, "#f5d741");
@@ -1937,6 +2007,20 @@
         }
       }
 
+      for (const trail of toxicTrails) {
+        const fade = Math.max(0, Math.min(1, trail.life / trail.maxLife));
+        ctx.save();
+        ctx.globalAlpha = 0.18 + fade * 0.35;
+        ctx.fillStyle = "#9bff43";
+        ctx.strokeStyle = "#c7ff75";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(trail.x, trail.y, 18, 11, 0.25, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+
       for (const coin of coins) {
         ctx.fillStyle = "#f5d741";
         ctx.beginPath();
@@ -1949,19 +2033,50 @@
       }
 
       for (const cheese of cheeses) {
-        ctx.fillStyle = "#ffe34d";
-        ctx.beginPath();
-        ctx.arc(cheese.x, cheese.y, 13, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = "#fff1a3";
-        ctx.lineWidth = 3;
-        ctx.stroke();
+        if (selectedMode === "Apocalypse") {
+          // Candy cane pickup: striped stick replacing cheese in Apocalypse Mode.
+          ctx.save();
+          ctx.translate(cheese.x, cheese.y);
+          ctx.rotate(-0.55);
+          ctx.lineCap = "round";
+          ctx.strokeStyle = "#fff7ed";
+          ctx.lineWidth = 10;
+          ctx.beginPath();
+          ctx.moveTo(0, 10);
+          ctx.lineTo(0, -7);
+          ctx.arc(0, -7, 6, Math.PI, 0, false);
+          ctx.stroke();
+          ctx.strokeStyle = "#e63848";
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(0, 10);
+          ctx.lineTo(0, -7);
+          ctx.arc(0, -7, 6, Math.PI, 0, false);
+          ctx.stroke();
+          ctx.strokeStyle = "#fff7ed";
+          ctx.lineWidth = 3;
+          for (const stripeY of [-1, 6]) {
+            ctx.beginPath();
+            ctx.moveTo(-4, stripeY + 2);
+            ctx.lineTo(4, stripeY - 2);
+            ctx.stroke();
+          }
+          ctx.restore();
+        } else {
+          ctx.fillStyle = "#ffe34d";
+          ctx.beginPath();
+          ctx.arc(cheese.x, cheese.y, 13, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = "#fff1a3";
+          ctx.lineWidth = 3;
+          ctx.stroke();
 
-        ctx.fillStyle = "#c79d28";
-        ctx.beginPath();
-        ctx.arc(cheese.x - 4, cheese.y - 3, 2, 0, Math.PI * 2);
-        ctx.arc(cheese.x + 4, cheese.y + 3, 2, 0, Math.PI * 2);
-        ctx.fill();
+          ctx.fillStyle = "#c79d28";
+          ctx.beginPath();
+          ctx.arc(cheese.x - 4, cheese.y - 3, 2, 0, Math.PI * 2);
+          ctx.arc(cheese.x + 4, cheese.y + 3, 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
 
       for (const bullet of bullets) {
@@ -1973,7 +2088,11 @@
 
       for (const enemy of enemies) {
         const radius = enemy.size / 2;
-        const color = enemy.hypnotized ? "#a438d1" : enemyTypes[enemy.type].color;
+        const color = enemy.hypnotized
+          ? "#a438d1"
+          : enemy.isCorrupted
+            ? "#5a286f"
+            : enemyTypes[enemy.type].color;
         const overlord = isOverlord(enemy);
 
         if (enemy.type === "flame") drawFlameGlow(enemy, radius);
@@ -1986,9 +2105,12 @@
           ctx.arc(enemy.x, enemy.y, radius, 0, Math.PI * 2);
           ctx.fill();
 
-          ctx.strokeStyle = enemy.hypnotized || overlord ? "#f5d741" : "#141914";
-          ctx.lineWidth = overlord ? 5 : 2;
+          ctx.strokeStyle = enemy.isCorrupted ? "#a9ff48" : enemy.hypnotized || overlord ? "#f5d741" : "#141914";
+          ctx.lineWidth = enemy.isCorrupted || overlord ? 4 : 2;
           ctx.stroke();
+          if (enemy.isCorrupted) {
+            drawText("☣", enemy.x, enemy.y + 6, "#baff65", 15, "center");
+          }
         }
 
         const barWidth = overlord ? 240 : Math.max(enemy.size, 32);
