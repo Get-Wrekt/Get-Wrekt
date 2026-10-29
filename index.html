@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Gloop Survival</title>
+  <title>Gloop Survival v1.0.2</title>
 
   <style>
     * { box-sizing: border-box; }
@@ -548,14 +548,16 @@
       "AK-47": { damage: 18, cooldown: 0.10, speed: 800, pellets: 1, spread: 0.08 },
       Shotgun: { damage: 20, cooldown: 0.50, speed: 700, pellets: 6, spread: 0.28 },
       Sniper: { damage: 140, cooldown: 0.90, speed: 1150, pellets: 1, spread: 0 },
-      "Grenade Launcher": { damage: 65, cooldown: 0.72, speed: 500, pellets: 1, spread: 0 }
+      "Grenade Launcher": { damage: 65, cooldown: 0.72, speed: 500, pellets: 1, spread: 0 },
+      Katana: { damage: 78, cooldown: 0.48, speed: 0, pellets: 1, spread: 0, melee: true }
     };
 
     const gunPrices = {
       "AK-47": 150,
       Shotgun: 200,
       Sniper: 300,
-      "Grenade Launcher": 350
+      "Grenade Launcher": 350,
+      Katana: 450
     };
 
     const weaponMilestones = {
@@ -588,6 +590,12 @@
         5: "Explosions freeze enemies in the blast.",
         10: "Explosions burn enemies in the blast.",
         15: "Explosion radius is tripled."
+      },
+      Katana: {
+        3: "Slash reach increases.",
+        5: "Slashes hit a wider arc.",
+        10: "Slashes deal bonus damage to nearby enemies.",
+        15: "A wide, powerful slash cuts through multiple enemies."
       }
     };
 
@@ -610,7 +618,19 @@
       rusherBossOverlord: { size: 145, hp: 6500, speed: 100, damage: 40, reward: 550, color: "#e5a91f" },
       iceBossOverlord: { size: 155, hp: 7000, speed: 42, damage: 40, reward: 550, color: "#28b9e0" },
       flameBossOverlord: { size: 155, hp: 7000, speed: 65, damage: 40, reward: 40, color: "#f04420" },
-      motherBossOverlord: { size: 180, hp: 10000, speed: 38, damage: 45, reward: 750, color: "#c52d83" }
+      motherBossOverlord: { size: 180, hp: 10000, speed: 38, damage: 45, reward: 750, color: "#c52d83" },
+      riftBoss: { size: 190, hp: 12500, speed: 43, damage: 48, reward: 1000, color: "#23d9d0" },
+      overcharged: { size: 100, hp: 2800, speed: 48, damage: 22, reward: 320, color: "#65f36b" },
+      rusherOvercharged: { size: 88, hp: 2300, speed: 92, damage: 18, reward: 340, color: "#ffcf43" },
+      iceOvercharged: { size: 96, hp: 2600, speed: 42, damage: 20, reward: 360, color: "#61e5ff" },
+      flameOvercharged: { size: 96, hp: 2600, speed: 52, damage: 20, reward: 360, color: "#ff7138" },
+      poisonOvercharged: { size: 98, hp: 2750, speed: 46, damage: 19, reward: 390, color: "#a7e33d" },
+      bossOvercharged: { size: 178, hp: 9500, speed: 38, damage: 30, reward: 800, color: "#c65aff" },
+      bossRusherOvercharged: { size: 170, hp: 9800, speed: 44, damage: 31, reward: 850, color: "#ffb52e" },
+      bossIceOvercharged: { size: 176, hp: 10500, speed: 36, damage: 32, reward: 900, color: "#79eaff" },
+      bossFlameOvercharged: { size: 176, hp: 10500, speed: 40, damage: 32, reward: 900, color: "#ff623b" },
+      bossPoisonOvercharged: { size: 180, hp: 11200, speed: 36, damage: 31, reward: 950, color: "#b8ed43" },
+      finalBossOvercharged: { size: 230, hp: 22000, speed: 34, damage: 38, reward: 2500, color: "#ff3de2" }
     };
 
     const bossWaves = {
@@ -623,7 +643,17 @@
       70: "rusherBossOverlord",
       80: "iceBossOverlord",
       90: "flameBossOverlord",
-      100: "motherBossOverlord"
+      100: "motherBossOverlord",
+      110: "overcharged",
+      120: "rusherOvercharged",
+      130: "iceOvercharged",
+      140: "flameOvercharged",
+      150: "bossOvercharged",
+      160: "bossRusherOvercharged",
+      170: "bossIceOvercharged",
+      180: "bossFlameOvercharged",
+      190: "bossPoisonOvercharged",
+      200: "finalBossOvercharged"
     };
 
     const enemyNames = {
@@ -643,7 +673,19 @@
       rusherBossOverlord: "Rusher Boss Overlord",
       iceBossOverlord: "Ice Boss Overlord",
       flameBossOverlord: "Flame Boss Overlord",
-      motherBossOverlord: "Mother Boss Overlord"
+      motherBossOverlord: "Mother Boss Overlord",
+      riftBoss: "Rift Overlord",
+      overcharged: "Overcharged Overlord",
+      rusherOvercharged: "Rusher Overcharged Overlord",
+      iceOvercharged: "Ice Overcharged Overlord",
+      flameOvercharged: "Flame Overcharged Overlord",
+      poisonOvercharged: "Poison Overcharged Overlord",
+      bossOvercharged: "Boss Basic Overcharged",
+      bossRusherOvercharged: "Boss Rusher Overcharged",
+      bossIceOvercharged: "Boss Ice Overcharged",
+      bossFlameOvercharged: "Boss Flame Overcharged",
+      bossPoisonOvercharged: "Boss Poison Overcharged",
+      finalBossOvercharged: "BOSS BOSS OVERCHARGED — FINAL BOSS"
     };
 
     // Boss types are the values in bossWaves.
@@ -658,9 +700,12 @@
     let player = null;
     let enemies = [];
     let bullets = [];
+    let enemyProjectiles = [];
+    let slashEffects = [];
     let coins = [];
     let cheeses = [];
     let toxicTrails = [];
+    let visualEffects = [];
     let apocalypseTrailDamageCooldown = 0;
     let runWeapons = [];
     let weaponLevels = {};
@@ -673,6 +718,10 @@
     let choosingUpgrade = false;
     let messageTimer = 0;
     let slowTimer = 0;
+    let playerBurnTimer = 0;
+    let playerBurnTick = 0;
+    let playerPoisonTimer = 0;
+    let playerPoisonTick = 0;
     let playerDamageCooldown = 0;
     let lastTime = 0;
     let runDamageBonus = 0;
@@ -746,7 +795,7 @@
             <div class="actions">
               <button id="play-button">PLAY</button>
             </div>
-            <p class="version-label">v1.0.1</p>
+            <p class="version-label">v1.0.2</p>
           </div>
         </div>
       `);
@@ -891,6 +940,7 @@
           <div class="tutorial-grid">
             <div class="tutorial-card"><div class="tutorial-sprite tutorial-pickup">🪙</div><div><strong>Coins</strong><span>Collect from defeated enemies. Spend in the shop.</span></div></div>
             <div class="tutorial-card"><div class="tutorial-sprite tutorial-pickup">🧀</div><div><strong>Cheese</strong><span>Restores 30 health.</span></div></div>
+            <div class="tutorial-card"><div class="tutorial-sprite tutorial-pickup">⚔️</div><div><strong>Katana</strong><span>A melee weapon that slashes enemies in front of you. Upgrade its reach, arc, and damage.</span></div></div>
           </div>
 
           <h2>☣️ Apocalypse Mode</h2>
@@ -902,7 +952,7 @@
           </div>
 
           <h2>🛒 Shop & upgrades</h2>
-          <p class="tutorial-intro">Every 5 waves, spend coins on upgrades. New guns appear every 10 waves. Upgrade damage, health, speed, fire rate, and damage resistance.</p>
+          <p class="tutorial-intro">Every 5 waves, spend coins on upgrades. New weapons appear every 10 waves, including the Katana. From wave 110 onward, Overcharged bosses fire special projectiles. Boss waves 150–190 summon matching Overcharged minions: basic, rusher, ice, flame, and poison. Ice shots slow you, flame shots burn, poison shots deal damage over time, and the Boss Boss Overcharged at wave 200 is the final boss.</p>
         </div>
         <div class="actions tutorial-navigation">
           <button id="tutorial-back-button">BACK TO HOME</button>
@@ -986,6 +1036,22 @@
       `;
     }
 
+    function addBurst(x, y, color = "#f5d741", amount = 10, size = 4) {
+      for (let i = 0; i < amount; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 45 + Math.random() * 170;
+        visualEffects.push({
+          x, y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 0.25 + Math.random() * 0.35,
+          maxLife: 0.6,
+          color,
+          size: size * (0.6 + Math.random() * 0.9)
+        });
+      }
+    }
+
     function spawn(kind, x, y) {
       const type = enemyTypes[kind];
       if (!type) return null;
@@ -1021,6 +1087,11 @@
         attackTarget: null,
         facingAngle: 0,
         summonCooldown: 3,
+        riftPulseCooldown: 4.2,
+        riftPulseWarning: false,
+        rangedAttackCooldown: 1.2 + Math.random() * 0.8,
+        summonCooldown: 3,
+        summonVariant: ({ overcharged: "normal", rusherOvercharged: "rusher", iceOvercharged: "ice", flameOvercharged: "flame", poisonOvercharged: "poison", bossOvercharged: "normal", bossRusherOvercharged: "rusher", bossIceOvercharged: "ice", bossFlameOvercharged: "flame", bossPoisonOvercharged: "poison" })[kind] || "normal",
         dashCooldown: 2.5,
         dashTime: 0,
         dashVx: 0,
@@ -1030,6 +1101,12 @@
         trailTimer: 0.15 + Math.random() * 0.2
       };
 
+      if (["bossOvercharged", "bossRusherOvercharged", "bossIceOvercharged", "bossFlameOvercharged", "bossPoisonOvercharged"].includes(kind)) {
+        enemy.summonVariant = ({ bossOvercharged: "normal", bossRusherOvercharged: "rusher", bossIceOvercharged: "ice", bossFlameOvercharged: "flame", bossPoisonOvercharged: "poison" })[kind];
+      }
+      if (kind === "finalBossOvercharged") {
+        enemy.summonVariant = "all";
+      }
       enemies.push(enemy);
       return enemy;
     }
@@ -1111,9 +1188,12 @@
       runCoins = 0;
       enemies = [];
       bullets = [];
+      enemyProjectiles = [];
+      slashEffects = [];
       coins = [];
       cheeses = [];
       toxicTrails = [];
+      visualEffects = [];
       apocalypseTrailDamageCooldown = 0;
       wave = 1;
       waveTimer = waveDuration;
@@ -1123,6 +1203,10 @@
       choosingUpgrade = false;
       paused = false;
       slowTimer = 0;
+      playerBurnTimer = 0;
+      playerBurnTick = 0;
+      playerPoisonTimer = 0;
+      playerPoisonTick = 0;
       playerDamageCooldown = 0;
       mergerPhase = "gathering";
 
@@ -1164,6 +1248,11 @@
       if (name === "Shotgun" && level > 4) {
         damageBonusSteps = 3 + (level - 4) * 0.15 / 0.3;
         fireRateBonusSteps = 3 + (level - 4) * 0.075 / 0.15;
+      }
+      // Katana upgrades emphasize close-range damage and controlled attack speed.
+      if (name === "Katana") {
+        damageBonusSteps = upgradeSteps * 1.15;
+        fireRateBonusSteps = upgradeSteps * 0.65;
       }
 
       return {
@@ -1292,7 +1381,7 @@
           upgrades.push({
             id: `buy-gun-${name}`,
             title: `Buy ${name}`,
-            description: "Add this gun to your inventory and equip it in a weapon slot.",
+            description: "Add this weapon to your inventory and equip it in a weapon slot.",
             cost,
             isGunPurchase: true,
             action() { return buyGun(name); }
@@ -1304,13 +1393,13 @@
         <h1>WAVE ${shopWave} CLEARED — UPGRADES</h1>
         <p>Spend this run's coins here. Coins reset when you start a new run.</p>
         <p><strong>Coins: ${runCoins}</strong><br>
-        ${canBuyGuns ? "Gun purchases are available this shop." : "New guns are available every 10 waves."}</p>
+        ${canBuyGuns ? "Weapon purchases are available this shop." : "New weapons are available every 10 waves."}</p>
         <p id="upgrade-status">${escapeHtml(status)}</p>
 
         <div class="shop-layout">
           <aside class="inventory">
-            <h2>Gun Inventory</h2>
-            <p>Choose which owned guns to equip.</p>
+            <h2>Weapon Inventory</h2>
+            <p>Choose which owned weapons to equip.</p>
 
             <label for="slot-1"><strong>Slot 1</strong></label>
             <select id="slot-1">
@@ -1494,6 +1583,7 @@
 
         if (enemy.hp <= 0) killEnemy(enemy);
       }
+      addBurst(bullet.x, bullet.y, "#ff9b33", 8, 3);
     }
 
     function fire(slot) {
@@ -1505,6 +1595,30 @@
 
       const angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
       const level = weaponLevels[name] || 1;
+
+      if (name === "Katana") {
+        const reach = level >= 15 ? 112 : level >= 3 ? 94 : 78;
+        const halfArc = level >= 5 ? Math.PI * 0.43 : Math.PI * 0.32;
+        const damage = weapon.damage * (1 + runDamageBonus) * (level >= 10 ? 1.15 : 1);
+        slashEffects.push({ x: player.x, y: player.y, angle, reach, halfArc, life: 0.18, maxLife: 0.18, color: "#c8f5ff" });
+        let hitCount = 0;
+        for (const enemy of [...enemies]) {
+          if (enemy.hypnotized) continue;
+          const dx = enemy.x - player.x, dy = enemy.y - player.y;
+          const distance = Math.hypot(dx, dy);
+          let difference = Math.atan2(dy, dx) - angle;
+          while (difference > Math.PI) difference -= Math.PI * 2;
+          while (difference < -Math.PI) difference += Math.PI * 2;
+          if (distance <= reach + enemy.size * 0.25 && Math.abs(difference) <= halfArc) {
+            enemy.hp -= damage;
+            addBurst(enemy.x, enemy.y, "#b8f4ff", 5, 2.5);
+            if (enemy.hp <= 0) killEnemy(enemy);
+            hitCount++;
+          }
+        }
+        if (hitCount) addBurst(player.x + Math.cos(angle) * 36, player.y + Math.sin(angle) * 36, "#e7fbff", 6, 2.5);
+        return;
+      }
 
       for (let i = 0; i < weapon.pellets; i++) {
         let spread = weapon.spread;
@@ -1520,6 +1634,7 @@
           damage: weapon.damage * (1 + runDamageBonus),
           life: 2.5,
           weapon: name,
+          pulse: false,
           penetrationsLeft:
             name === "Sniper"
               ? level >= 5 ? 5 : level >= 3 ? 2 : 0
@@ -1538,6 +1653,7 @@
       if (index === -1) return;
 
       enemies.splice(index, 1);
+      addBurst(enemy.x, enemy.y, enemyTypes[enemy.type].color, isOverlord(enemy) ? 26 : 10, isOverlord(enemy) ? 6 : 3);
 
       if (!enemy.hypnotized && !enemy.countedAsDefeated) {
         markEnemyDefeatedForWave(enemy);
@@ -1632,7 +1748,13 @@
         rusherBossOverlord: "rusher",
         iceBossOverlord: "ice",
         flameBossOverlord: "flame",
-        motherBossOverlord: "mother"
+        motherBossOverlord: "mother",
+        bossOvercharged: "normal",
+        bossRusherOvercharged: "rusher",
+        bossIceOvercharged: "ice",
+        bossFlameOvercharged: "flame",
+        bossPoisonOvercharged: "poison",
+      finalBossOvercharged: ["normal", "rusher", "ice", "flame", "poison"][Math.floor(Math.random() * 5)]
       };
 
       const kind = summonTypes[enemy.type];
@@ -1724,11 +1846,37 @@
 
       waveTimer = Math.max(0, waveTimer - dt);
       slowTimer = Math.max(0, slowTimer - dt);
+      playerBurnTimer = Math.max(0, playerBurnTimer - dt);
+      playerBurnTick -= dt;
+      playerPoisonTimer = Math.max(0, playerPoisonTimer - dt);
+      playerPoisonTick -= dt;
+      if (playerPoisonTimer > 0 && playerPoisonTick <= 0) {
+        takePlayerDamage(2);
+        playerPoisonTick = 0.6;
+        addBurst(player.x, player.y, "#a7e33d", 3, 2);
+      }
+      if (playerBurnTimer > 0 && playerBurnTick <= 0) {
+        takePlayerDamage(3);
+        playerBurnTick = 0.5;
+        addBurst(player.x, player.y, "#ff6a32", 3, 2);
+      }
       playerDamageCooldown = Math.max(0, playerDamageCooldown - dt);
       apocalypseTrailDamageCooldown = Math.max(0, apocalypseTrailDamageCooldown - dt);
       for (const trail of [...toxicTrails]) {
         trail.life -= dt;
         if (trail.life <= 0) toxicTrails.splice(toxicTrails.indexOf(trail), 1);
+      }
+      for (const slash of [...slashEffects]) {
+        slash.life -= dt;
+        if (slash.life <= 0) slashEffects.splice(slashEffects.indexOf(slash), 1);
+      }
+      for (const effect of [...visualEffects]) {
+        effect.life -= dt;
+        effect.x += effect.vx * dt;
+        effect.y += effect.vy * dt;
+        effect.vx *= Math.max(0, 1 - 2.8 * dt);
+        effect.vy *= Math.max(0, 1 - 2.8 * dt);
+        if (effect.life <= 0) visualEffects.splice(visualEffects.indexOf(effect), 1);
       }
 
       const horizontal =
@@ -1818,6 +1966,25 @@
         }
       }
 
+      for (const projectile of [...enemyProjectiles]) {
+        projectile.x += projectile.vx * dt;
+        projectile.y += projectile.vy * dt;
+        projectile.life -= dt;
+        if (Math.hypot(projectile.x - player.x, projectile.y - player.y) < player.size / 2 + projectile.radius) {
+          if (playerDamageCooldown <= 0) {
+            takePlayerDamage(projectile.damage);
+            playerDamageCooldown = 0.28;
+            if (projectile.effect === "ice") slowTimer = Math.max(slowTimer, 1.7);
+            if (projectile.effect === "fire") { playerBurnTimer = Math.max(playerBurnTimer, 2.5); playerBurnTick = 0; }
+            if (projectile.effect === "poison") { playerPoisonTimer = Math.max(playerPoisonTimer, 3.0); playerPoisonTick = 0; }
+            addBurst(projectile.x, projectile.y, projectile.color, 7, 3);
+          }
+          enemyProjectiles.splice(enemyProjectiles.indexOf(projectile), 1);
+        } else if (projectile.life <= 0 || projectile.x < bounds.left - 40 || projectile.x > bounds.right + 40 || projectile.y < bounds.top - 40 || projectile.y > bounds.bottom + 40) {
+          enemyProjectiles.splice(enemyProjectiles.indexOf(projectile), 1);
+        }
+      }
+
       for (const enemy of [...enemies]) {
         enemy.hitCooldown = Math.max(0, enemy.hitCooldown - dt);
         enemy.burnCooldown = Math.max(0, enemy.burnCooldown - dt);
@@ -1877,6 +2044,28 @@
         }
 
         if (isOverlord(enemy)) {
+          const overchargedKinds = ["overcharged", "rusherOvercharged", "iceOvercharged", "flameOvercharged", "poisonOvercharged", "bossOvercharged", "bossRusherOvercharged", "bossIceOvercharged", "bossFlameOvercharged", "bossPoisonOvercharged", "finalBossOvercharged"];
+          if (overchargedKinds.includes(enemy.type)) {
+            enemy.rangedAttackCooldown -= dt;
+            if (enemy.rangedAttackCooldown <= 0) {
+              const shotAngle = Math.atan2(dy, dx);
+              const isRusherShot = ["rusherOvercharged", "bossRusherOvercharged"].includes(enemy.type);
+              const isIceShot = ["iceOvercharged", "bossIceOvercharged"].includes(enemy.type);
+              const isFlameShot = ["flameOvercharged", "bossFlameOvercharged"].includes(enemy.type);
+              const isPoisonShot = ["poisonOvercharged", "bossPoisonOvercharged"].includes(enemy.type);
+              const isBossShot = ["bossOvercharged", "bossRusherOvercharged", "bossIceOvercharged", "bossFlameOvercharged", "bossPoisonOvercharged"].includes(enemy.type);
+              const isFinalBoss = enemy.type === "finalBossOvercharged";
+              const color = isIceShot ? "#a8f4ff" : isFlameShot ? "#ff6a32" : isPoisonShot ? "#a7e33d" : isRusherShot ? "#ffe16b" : isFinalBoss ? "#ff3de2" : isBossShot ? "#e7a5ff" : "#9bff9d";
+              const speed = isRusherShot ? (isBossShot ? 420 : 390) : isFinalBoss ? 320 : isBossShot ? 275 : 300;
+              const count = isFinalBoss ? 7 : isBossShot ? 3 : 1;
+              for (let shot = 0; shot < count; shot++) {
+                const spread = count === 1 ? 0 : (shot - (count - 1) / 2) * (isFinalBoss ? 0.17 : 0.18);
+                const angle = shotAngle + spread;
+                enemyProjectiles.push({ x: enemy.x, y: enemy.y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, damage: isRusherShot ? 5 : isFinalBoss ? 15 : isBossShot ? 12 : isIceShot || isFlameShot || isPoisonShot ? 9 : 10, radius: isFinalBoss ? 10 : isBossShot ? 9 : 7, life: 3.2, effect: isIceShot ? "ice" : isFlameShot ? "fire" : isPoisonShot ? "poison" : "normal", color });
+              }
+              enemy.rangedAttackCooldown = isRusherShot ? (isBossShot ? 0.85 : 0.62) : isFinalBoss ? 1.15 : isBossShot ? 1.6 : 1.35;
+            }
+          }
           enemy.dashCooldown -= dt;
 
           if (enemy.dashTime > 0) {
@@ -1907,7 +2096,13 @@
             "rusherBossOverlord",
             "iceBossOverlord",
             "flameBossOverlord",
-            "motherBossOverlord"
+            "motherBossOverlord",
+            "bossOvercharged",
+            "bossRusherOvercharged",
+            "bossIceOvercharged",
+            "bossFlameOvercharged",
+            "bossPoisonOvercharged",
+            "finalBossOvercharged"
           ];
 
           if (summoningBosses.includes(enemy.type)) {
@@ -1916,7 +2111,22 @@
             if (enemy.summonCooldown <= 0) {
               summonFromOverlord(enemy);
               enemy.summonCooldown =
-                enemy.type === "motherBossOverlord" ? 1.5 : 2.5;
+                enemy.type === "motherBossOverlord" ? 1.5 : enemy.type === "finalBossOvercharged" ? 6.0 : ["bossOvercharged", "bossRusherOvercharged", "bossIceOvercharged", "bossFlameOvercharged", "bossPoisonOvercharged"].includes(enemy.type) ? 4.2 : 2.5;
+            }
+          }
+
+          if (enemy.type === "riftBoss") {
+            enemy.riftPulseCooldown -= dt;
+            enemy.riftPulseWarning = enemy.riftPulseCooldown <= 0.8;
+            if (enemy.riftPulseCooldown <= 0) {
+              const pulseDistance = Math.hypot(player.x - enemy.x, player.y - enemy.y);
+              addBurst(enemy.x, enemy.y, "#23d9d0", 34, 7);
+              if (pulseDistance <= 155 && playerDamageCooldown <= 0) {
+                takePlayerDamage(30);
+                playerDamageCooldown = 0.55;
+              }
+              enemy.riftPulseCooldown = 4.8;
+              enemy.riftPulseWarning = false;
             }
           }
         } else if (enemy.type === "merger" && mergerPhase === "gathering") {
@@ -2094,6 +2304,28 @@
     function draw() {
       ctx.fillStyle = selectedMode === "Apocalypse" ? "#252033" : "#5c9b41";
       ctx.fillRect(0, 0, W, H);
+
+      // v1.0.2 arena polish: a subtle grid and deterministic floor details improve depth without affecting gameplay.
+      ctx.save();
+      ctx.globalAlpha = selectedMode === "Apocalypse" ? 0.12 : 0.10;
+      ctx.strokeStyle = selectedMode === "Apocalypse" ? "#b98bda" : "#d8f0b0";
+      ctx.lineWidth = 1;
+      for (let gx = bounds.left + 25; gx < bounds.right; gx += 50) {
+        ctx.beginPath(); ctx.moveTo(gx, bounds.top); ctx.lineTo(gx, bounds.bottom); ctx.stroke();
+      }
+      for (let gy = bounds.top + 25; gy < bounds.bottom; gy += 50) {
+        ctx.beginPath(); ctx.moveTo(bounds.left, gy); ctx.lineTo(bounds.right, gy); ctx.stroke();
+      }
+      for (let i = 0; i < 34; i++) {
+        const px = bounds.left + 18 + ((i * 137) % (bounds.right - bounds.left - 36));
+        const py = bounds.top + 18 + ((i * 83) % (bounds.bottom - bounds.top - 36));
+        ctx.fillStyle = i % 3 === 0 ? "#203c1e" : selectedMode === "Apocalypse" ? "#8c64a8" : "#d4eaa0";
+        ctx.beginPath();
+        ctx.ellipse(px, py, 2 + (i % 3), 1.5 + (i % 2), i * 0.31, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
       if (selectedMode === "Apocalypse") {
         // Subtle toxic patches give the special mode a different atmosphere.
         ctx.save();
@@ -2221,15 +2453,59 @@
         }
       }
 
+      for (const effect of visualEffects) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, effect.life / effect.maxLife);
+        ctx.fillStyle = effect.color;
+        ctx.beginPath();
+        ctx.arc(effect.x, effect.y, effect.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
       for (const bullet of bullets) {
         ctx.fillStyle = bullet.explosive ? "#ff9b33" : "#f5d741";
         ctx.beginPath();
         ctx.arc(bullet.x, bullet.y, bullet.explosive ? 6 : 4, 0, Math.PI * 2);
         ctx.fill();
       }
+      for (const projectile of enemyProjectiles) {
+        ctx.save();
+        ctx.fillStyle = projectile.color;
+        ctx.shadowColor = projectile.color;
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(projectile.x, projectile.y, projectile.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+      for (const slash of slashEffects) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, slash.life / slash.maxLife);
+        ctx.strokeStyle = slash.color;
+        ctx.lineWidth = 10;
+        ctx.lineCap = "round";
+        ctx.shadowColor = "#70dcff";
+        ctx.shadowBlur = 14;
+        ctx.beginPath();
+        ctx.arc(slash.x, slash.y, slash.reach * 0.72, slash.angle - slash.halfArc, slash.angle + slash.halfArc);
+        ctx.stroke();
+        ctx.restore();
+      }
 
       for (const enemy of enemies) {
         const radius = enemy.size / 2;
+        if (enemy.type === "riftBoss" && enemy.riftPulseWarning) {
+          const pulseProgress = Math.max(0, Math.min(1, 1 - enemy.riftPulseCooldown / 0.8));
+          ctx.save();
+          ctx.fillStyle = `rgba(35,217,208,${0.08 + pulseProgress * 0.12})`;
+          ctx.strokeStyle = `rgba(71,255,240,${0.4 + pulseProgress * 0.55})`;
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.arc(enemy.x, enemy.y, 45 + pulseProgress * 110, 0, Math.PI * 2);
+          ctx.fill(); ctx.stroke();
+          ctx.restore();
+        }
         const color = enemy.hypnotized
           ? "#a438d1"
           : enemy.isCorrupted
@@ -2237,7 +2513,17 @@
             : enemyTypes[enemy.type].color;
         const overlord = isOverlord(enemy);
 
-        if (enemy.type === "flame") drawFlameGlow(enemy, radius);
+        if (enemy.type === "flame" || enemy.type === "flameOvercharged") drawFlameGlow(enemy, radius);
+        if (["overcharged", "rusherOvercharged", "iceOvercharged", "flameOvercharged", "poisonOvercharged", "bossOvercharged", "bossRusherOvercharged", "bossIceOvercharged", "bossFlameOvercharged", "bossPoisonOvercharged", "finalBossOvercharged"].includes(enemy.type)) {
+          ctx.save();
+          ctx.strokeStyle = enemyTypes[enemy.type].color;
+          ctx.globalAlpha = 0.55 + Math.sin(performance.now() / 130) * 0.2;
+          ctx.lineWidth = enemy.type === "finalBossOvercharged" ? 10 : ["bossOvercharged", "bossRusherOvercharged", "bossIceOvercharged", "bossFlameOvercharged", "bossPoisonOvercharged"].includes(enemy.type) ? 7 : 4;
+          ctx.beginPath();
+          ctx.arc(enemy.x, enemy.y, radius + 8 + Math.sin(performance.now() / 170) * 3, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
 
         if (enemy.type === "tank") {
           drawTank(enemy, color);
@@ -2252,6 +2538,17 @@
           ctx.stroke();
           if (enemy.isCorrupted) {
             drawText("☣", enemy.x, enemy.y + 6, "#baff65", 15, "center");
+          }
+          if (["bossOvercharged", "bossRusherOvercharged", "bossIceOvercharged", "bossFlameOvercharged", "bossPoisonOvercharged", "finalBossOvercharged"].includes(enemy.type)) {
+            drawText("★", enemy.x, enemy.y + 12, "#fff0ff", 42, "center");
+          }
+          if (enemy.type === "riftBoss") {
+            drawText("✦", enemy.x, enemy.y + 10, "#e7ffff", 38, "center");
+            ctx.strokeStyle = "#b9fffb";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(enemy.x, enemy.y, radius + 9 + Math.sin(performance.now() / 170) * 3, 0, Math.PI * 2);
+            ctx.stroke();
           }
         }
 
