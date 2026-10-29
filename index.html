@@ -593,7 +593,7 @@
       },
       Katana: {
         3: "Slash reach increases.",
-        5: "Slashes hit a wider arc.",
+        5: "Slashes cover a wider area.",
         10: "Slashes deal bonus damage to nearby enemies.",
         15: "A wide, powerful slash cuts through multiple enemies."
       }
@@ -940,7 +940,6 @@
           <div class="tutorial-grid">
             <div class="tutorial-card"><div class="tutorial-sprite tutorial-pickup">🪙</div><div><strong>Coins</strong><span>Collect from defeated enemies. Spend in the shop.</span></div></div>
             <div class="tutorial-card"><div class="tutorial-sprite tutorial-pickup">🧀</div><div><strong>Cheese</strong><span>Restores 30 health.</span></div></div>
-            <div class="tutorial-card"><div class="tutorial-sprite tutorial-pickup">⚔️</div><div><strong>Katana</strong><span>A melee weapon that slashes enemies in front of you. Upgrade its reach, arc, and damage.</span></div></div>
           </div>
 
           <h2>☣️ Apocalypse Mode</h2>
@@ -952,7 +951,7 @@
           </div>
 
           <h2>🛒 Shop & upgrades</h2>
-          <p class="tutorial-intro">Every 5 waves, spend coins on upgrades. New weapons appear every 10 waves, including the Katana. From wave 110 onward, Overcharged bosses fire special projectiles. Boss waves 150–190 summon matching Overcharged minions: basic, rusher, ice, flame, and poison. Ice shots slow you, flame shots burn, poison shots deal damage over time, and the Boss Boss Overcharged at wave 200 is the final boss.</p>
+          <p class="tutorial-intro">Spend coins in the shop to buy weapons and upgrades. The Katana is a melee weapon you buy from the shop, not a pickup; its slashes hit enemies in front of you, and upgrades can improve its reach, arc, and damage. From wave 110 onward, Overcharged bosses fire special projectiles. Boss waves 150–190 summon matching Overcharged minions: basic, rusher, ice, flame, and poison. Ice shots slow you, flame shots burn, poison shots deal damage over time, and the Boss Boss Overcharged at wave 200 is the final boss.</p>
         </div>
         <div class="actions tutorial-navigation">
           <button id="tutorial-back-button">BACK TO HOME</button>
@@ -1600,6 +1599,7 @@
         const reach = level >= 15 ? 112 : level >= 3 ? 94 : 78;
         const halfArc = level >= 5 ? Math.PI * 0.43 : Math.PI * 0.32;
         const damage = weapon.damage * (1 + runDamageBonus) * (level >= 10 ? 1.15 : 1);
+        // Kenji-style slash: a curved arc with a matching circular-sector hitbox, not a dash.
         slashEffects.push({ x: player.x, y: player.y, angle, reach, halfArc, life: 0.18, maxLife: 0.18, color: "#c8f5ff" });
         let hitCount = 0;
         for (const enemy of [...enemies]) {
@@ -2487,6 +2487,13 @@
         ctx.lineCap = "round";
         ctx.shadowColor = "#70dcff";
         ctx.shadowBlur = 14;
+        ctx.beginPath();
+        // Curved Kenji-style slash arc; the damage hitbox uses the same arc sector.
+        ctx.arc(slash.x, slash.y, slash.reach * 0.72, slash.angle - slash.halfArc, slash.angle + slash.halfArc);
+        ctx.stroke();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 3;
+        ctx.shadowBlur = 5;
         ctx.beginPath();
         ctx.arc(slash.x, slash.y, slash.reach * 0.72, slash.angle - slash.halfArc, slash.angle + slash.halfArc);
         ctx.stroke();
