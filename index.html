@@ -897,7 +897,7 @@
           <p class="tutorial-intro">Look out for these special visuals in Apocalypse mode.</p>
           <div class="tutorial-grid">
             <div class="tutorial-card"><div class="tutorial-sprite">${tutorialCorruptedGloopIcon()}</div><div><strong>Corrupted Gloop</strong><span>Basic Gloops turn purple with a toxic symbol and leave toxic trails.</span></div></div>
-            <div class="tutorial-card"><div class="tutorial-sprite">${tutorialToxicTrailIcon()}</div><div><strong>Toxic Trail</strong><span>Green toxic patches deal 3 damage per tick and last 0.7 seconds.</span></div></div>
+            <div class="tutorial-card"><div class="tutorial-sprite">${tutorialToxicTrailIcon()}</div><div><strong>Toxic Trail</strong><span>Green toxic patches deal 3 damage per tick and last 1.75 seconds.</span></div></div>
             <div class="tutorial-card"><div class="tutorial-sprite">${tutorialCandyCaneIcon()}</div><div><strong>Candy Cane</strong><span>Replaces cheese and restores 50 health.</span></div></div>
           </div>
 
@@ -1925,7 +1925,7 @@
         if (selectedMode === "Apocalypse" && enemy.isCorrupted) {
           enemy.trailTimer -= dt;
           if (enemy.trailTimer <= 0) {
-            toxicTrails.push({ x: enemy.x, y: enemy.y, life: 0.7, maxLife: 0.7 });
+            toxicTrails.push({ x: enemy.x, y: enemy.y, life: 1.75, maxLife: 1.75 });
             enemy.trailTimer = 0.32;
           }
         }
