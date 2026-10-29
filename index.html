@@ -546,7 +546,7 @@
     const weapons = {
       Pistol: { damage: 40, cooldown: 0.24, speed: 760, pellets: 1, spread: 0 },
       "AK-47": { damage: 18, cooldown: 0.10, speed: 800, pellets: 1, spread: 0.08 },
-      Shotgun: { damage: 27, cooldown: 0.50, speed: 700, pellets: 6, spread: 0.28 },
+      Shotgun: { damage: 20, cooldown: 0.50, speed: 700, pellets: 6, spread: 0.28 },
       Sniper: { damage: 140, cooldown: 0.90, speed: 1150, pellets: 1, spread: 0 },
       "Grenade Launcher": { damage: 65, cooldown: 0.72, speed: 500, pellets: 1, spread: 0 }
     };
@@ -1151,11 +1151,25 @@
       const base = weapons[name];
       const level = weaponLevels[name] || 1;
       const upgradeSteps = level - 1;
+      let damageBonusSteps = upgradeSteps;
+      let fireRateBonusSteps = upgradeSteps;
+
+      // Keep early upgrades rewarding, but soften the AK-47's scaling at high levels.
+      if (name === "AK-47" && level > 9) {
+        damageBonusSteps = 8 + (level - 9) * 0.12 / 0.3;
+        fireRateBonusSteps = 8 + (level - 9) * 0.06 / 0.15;
+      }
+
+      // Shotgun upgrades after explosive pellets unlock at level 5 scale more gently.
+      if (name === "Shotgun" && level > 4) {
+        damageBonusSteps = 3 + (level - 4) * 0.15 / 0.3;
+        fireRateBonusSteps = 3 + (level - 4) * 0.075 / 0.15;
+      }
 
       return {
         ...base,
-        damage: base.damage * (1 + upgradeSteps * 0.3),
-        cooldown: base.cooldown / (1 + upgradeSteps * 0.15)
+        damage: base.damage * (1 + damageBonusSteps * 0.3),
+        cooldown: base.cooldown / (1 + fireRateBonusSteps * 0.15)
       };
     }
 
@@ -1406,10 +1420,12 @@
           getMilestoneLevel(name, 3) ? 110 : 85;
       }
 
-      if (
-        (name === "Pistol" || name === "Shotgun") &&
-        getMilestoneLevel(name, 5)
-      ) {
+      if (name === "Shotgun" && getMilestoneLevel(name, 5)) {
+        // Each shotgun pellet can trigger an explosion, so use a smaller blast.
+        return 30;
+      }
+
+      if (name === "Pistol" && getMilestoneLevel(name, 5)) {
         return 42.5;
       }
 
@@ -1468,7 +1484,8 @@
         if (enemy.hypnotized) continue;
         if (Math.hypot(enemy.x - bullet.x, enemy.y - bullet.y) > radius) continue;
 
-        enemy.hp -= bullet.damage * 0.55;
+        const explosionDamageMultiplier = bullet.weapon === "Shotgun" ? 0.25 : 0.55;
+        enemy.hp -= bullet.damage * explosionDamageMultiplier;
 
         if (burns) applyBurn(enemy, BURN_DURATION);
         if (freezes) {
