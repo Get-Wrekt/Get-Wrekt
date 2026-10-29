@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Gloop Survival v1.0.2</title>
+  <title>Gloop Survival v1.1.2</title>
 
   <style>
     * { box-sizing: border-box; }
@@ -99,20 +99,59 @@
     }
     .home-layout {
       display: grid;
-      grid-template-columns: minmax(300px, .95fr) minmax(320px, 1.05fr);
+      grid-template-columns: minmax(290px, .9fr) minmax(600px, 1.5fr);
       align-items: start;
-      gap: 26px;
+      gap: 22px;
       text-align: center;
+    }
+    .home-right-area {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: minmax(205px, .8fr) minmax(270px, 1.2fr);
+      align-items: start;
+      gap: 14px;
     }
     .home-main {
       min-width: 0;
-      padding: 4px 14px 10px;
+      padding: 4px 6px 10px;
       align-self: start;
-      /* Keep the menu centered in the visible panel even when the leaderboard is tall. */
-      position: sticky;
-      top: 50%;
-      transform: translateY(-50%);
     }
+    .changelog-box {
+      min-width: 0;
+      max-height: 430px;
+      overflow-y: auto;
+      padding: 14px;
+      text-align: left;
+      border: 2px solid #71806b;
+      border-radius: 8px;
+      background: #293329;
+      box-shadow: inset 0 0 18px rgba(0, 0, 0, .12);
+      scrollbar-color: #71806b #202820;
+    }
+    .changelog-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding-bottom: 9px;
+      margin-bottom: 10px;
+      border-bottom: 1px solid #53614e;
+    }
+    .changelog-heading h2 { margin: 0; font-size: 19px; }
+    .changelog-version {
+      flex: 0 0 auto;
+      padding: 4px 7px;
+      color: #202820;
+      background: #f5d741;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+    .changelog-intro { margin: 0 0 12px; color: #cbd5c0; font-size: 12px; line-height: 1.45; }
+    .changelog-section { margin: 12px 0 5px; color: #a9ff62; font-size: 13px; font-weight: bold; letter-spacing: .5px; }
+    .changelog-list { margin: 5px 0 0; padding-left: 18px; color: #edf1e9; font-size: 12px; line-height: 1.45; }
+    .changelog-list li { margin: 0 0 6px; }
+    .changelog-list strong { color: #f5d741; }
     .home-main h1 { margin-top: 0; }
     .version-label {
       margin: 4px 0 0;
@@ -342,14 +381,23 @@
     .leaderboard-table th:nth-child(2), .leaderboard-table td:nth-child(2) { text-align: left; }
     .leaderboard-empty { text-align: center !important; color: #cbd5c0; }
 
-    @media (max-width: 700px) {
-      #panel.home-panel { width: min(560px, calc(100vw - 16px)); padding: 12px; }
+    @media (max-width: 1000px) {
+      #panel.home-panel { width: min(760px, calc(100vw - 16px)); padding: 12px; }
       .home-layout { grid-template-columns: minmax(0, 1fr); gap: 8px; }
-      .home-main { grid-row: 1; padding: 4px; position: static; top: auto; transform: none; }
+      .home-right-area { grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); }
+      .home-main { padding: 4px; }
       .home-layout .leaderboard-box { grid-row: 2; margin: 8px 0; }
       .leaderboard-box { padding: 10px; }
       .leaderboard-table { font-size: 12px; }
       .leaderboard-table th, .leaderboard-table td { padding: 6px 3px; }
+    }
+    @media (max-width: 560px) {
+      #panel.home-panel { width: min(560px, calc(100vw - 12px)); padding: 10px; }
+      .home-right-area { grid-template-columns: minmax(0, 1fr); }
+      .changelog-box { max-height: 260px; }
+      .home-main { grid-row: 1; }
+      .changelog-box { grid-row: 2; }
+      .home-layout .leaderboard-box { grid-row: 3; }
       #panel { padding: 14px; }
       .shop-layout { grid-template-columns: 1fr; }
       .inventory { position: static; }
@@ -788,14 +836,59 @@
           <button id="refresh-leaderboard-button" type="button">REFRESH SCORES</button>
           </div>
 
-          <div class="home-main">
-            <p class="season-label">SEASON 1: GLOOP APOCALYPSE</p>
-            <h1>GLOOP SURVIVAL</h1>
-            <p>Survive the waves. Upgrade your weapons. Defeat the Gloops.</p>
-            <div class="actions">
-              <button id="play-button">PLAY</button>
+          <div class="home-right-area">
+            <div class="home-main">
+              <p class="season-label">SEASON 1: GLOOP APOCALYPSE</p>
+              <h1>GLOOP SURVIVAL</h1>
+              <p>Survive the waves. Upgrade your weapons. Defeat the Gloops.</p>
+              <div class="actions">
+                <button id="play-button">PLAY</button>
+              </div>
+              <p class="version-label">v1.1.2</p>
             </div>
-            <p class="version-label">v1.0.2</p>
+
+            <aside class="changelog-box" aria-label="Game changelog">
+              <div class="changelog-heading">
+                <h2>📋 CHANGELOG</h2>
+                <span class="changelog-version">v1.1.2</span>
+              </div>
+              <p class="changelog-intro">The major update: new melee combat, new Overcharged bosses, balance changes, and clearer controls.</p>
+
+              <h3 class="changelog-section">NEW WEAPON</h3>
+              <ul class="changelog-list">
+                <li><strong>Katana:</strong> buy it from the shop and attack at close range with a curved slash arc. The hitbox follows the arc; it does not dash.</li>
+                <li>Katana upgrades can improve damage, reach, and slash width.</li>
+              </ul>
+
+              <h3 class="changelog-section">OVERCHARGED BOSS WAVES</h3>
+              <ul class="changelog-list">
+                <li><strong>Wave 110:</strong> Basic Overcharged, with standard projectiles.</li>
+                <li><strong>Wave 120:</strong> Rusher Overcharged, with faster, weaker shots.</li>
+                <li><strong>Wave 130:</strong> Ice Overcharged; icy shots slow the player.</li>
+                <li><strong>Wave 140:</strong> Flame Overcharged; shots inflict burning damage.</li>
+                <li><strong>Wave 150:</strong> Boss Basic Overcharged, summoning basic Overcharges.</li>
+                <li><strong>Wave 160:</strong> Boss Rusher Overcharged, summoning rusher Overcharges.</li>
+                <li><strong>Wave 170:</strong> Boss Ice Overcharged, summoning ice Overcharges.</li>
+                <li><strong>Wave 180:</strong> Boss Flame Overcharged, summoning flame Overcharges.</li>
+                <li><strong>Wave 190:</strong> Boss Poison Overcharged, summoning poison Overcharges and inflicting poison damage over time.</li>
+                <li><strong>Wave 200:</strong> BOSS BOSS OVERCHARGED — the final boss, with multiple Overcharged minion types.</li>
+              </ul>
+
+              <h3 class="changelog-section">WEAPON BALANCE</h3>
+              <ul class="changelog-list">
+                <li><strong>AK-47:</strong> high-level damage and fire-rate scaling reduced from level 10 onward.</li>
+                <li><strong>Shotgun:</strong> pellet damage reduced from 27 to 20; explosive damage and blast radius reduced.</li>
+              </ul>
+
+              <h3 class="changelog-section">GAMEPLAY & CONTROLS</h3>
+              <ul class="changelog-list">
+                <li><strong>Toxic trails:</strong> last 1.75 seconds and deal 3 damage per tick.</li>
+                <li><strong>Spacebar:</strong> attacks with the primary weapon (Slot 1).</li>
+                <li><strong>Left-click:</strong> attacks with the secondary weapon (Slot 2). If no secondary weapon is equipped, it does not attack.</li>
+                <li><strong>Right-click:</strong> no action assigned.</li>
+                <li>Combat visuals and arena presentation have been polished.</li>
+              </ul>
+            </aside>
           </div>
         </div>
       `);
@@ -920,7 +1013,7 @@
           <h2>🎮 Controls</h2>
           <div class="tutorial-controls">
             <div class="tutorial-control"><div class="tutorial-control-icon">WASD<br>⬆️⬇️</div><div><strong>Move</strong><span>WASD or arrow keys</span></div></div>
-            <div class="tutorial-control"><div class="tutorial-control-icon">🖱️</div><div><strong>Shoot</strong><span>Aim with mouse. Left-click Slot 1; right-click Slot 2.</span></div></div>
+            <div class="tutorial-control"><div class="tutorial-control-icon">🖱️</div><div><strong>Shoot</strong><span>Aim with mouse. Spacebar uses your primary weapon (Slot 1); left-click uses your secondary weapon (Slot 2). Right-click does nothing.</span></div></div>
             <div class="tutorial-control"><div class="tutorial-control-icon">P</div><div><strong>Pause</strong><span>Press P to pause or resume.</span></div></div>
             <div class="tutorial-control"><div class="tutorial-control-icon">⏱️</div><div><strong>Survive</strong><span>Outlast the timer or defeat every enemy.</span></div></div>
           </div>
@@ -951,7 +1044,7 @@
           </div>
 
           <h2>🛒 Shop & upgrades</h2>
-          <p class="tutorial-intro">Spend coins in the shop to buy weapons and upgrades. The Katana is a melee weapon you buy from the shop, not a pickup; its slashes hit enemies in front of you, and upgrades can improve its reach, arc, and damage. From wave 110 onward, Overcharged bosses fire special projectiles. Boss waves 150–190 summon matching Overcharged minions: basic, rusher, ice, flame, and poison. Ice shots slow you, flame shots burn, poison shots deal damage over time, and the Boss Boss Overcharged at wave 200 is the final boss.</p>
+          <p class="tutorial-intro">Spend coins in the shop to buy weapons and upgrades. From wave 110 onward, Overcharged bosses fire special projectiles. Boss waves 150–190 summon matching Overcharged minions: basic, rusher, ice, flame, and poison. Ice shots slow you, flame shots burn, poison shots deal damage over time, and the Boss Boss Overcharged at wave 200 is the final boss.</p>
         </div>
         <div class="actions tutorial-navigation">
           <button id="tutorial-back-button">BACK TO HOME</button>
@@ -1902,7 +1995,8 @@
 
       for (let slot = 0; slot < 2; slot++) {
         cooldowns[slot] = Math.max(0, cooldowns[slot] - dt);
-        if (runWeapons[slot] && mouse.buttons[slot] && cooldowns[slot] <= 0) {
+        const attackPressed = slot === 0 ? keys.has(" ") : mouse.buttons[1];
+        if (runWeapons[slot] && attackPressed && cooldowns[slot] <= 0) {
           fire(slot);
         }
       }
@@ -2305,7 +2399,7 @@
       ctx.fillStyle = selectedMode === "Apocalypse" ? "#252033" : "#5c9b41";
       ctx.fillRect(0, 0, W, H);
 
-      // v1.0.2 arena polish: a subtle grid and deterministic floor details improve depth without affecting gameplay.
+      // v1.1.2 arena polish: a subtle grid and deterministic floor details improve depth without affecting gameplay.
       ctx.save();
       ctx.globalAlpha = selectedMode === "Apocalypse" ? 0.12 : 0.10;
       ctx.strokeStyle = selectedMode === "Apocalypse" ? "#b98bda" : "#d8f0b0";
@@ -2589,7 +2683,7 @@
         ctx.strokeRect(player.x - 14, player.y - 14, 28, 28);
 
         drawText(
-          `Left-click: ${runWeapons[0] || "None"} | Right-click: ${runWeapons[1] || "None"}`,
+          `Space: ${runWeapons[0] || "None"} | Left-click: ${runWeapons[1] || "None"}`,
           18, H - 19, "#f5f5f5", 16
         );
         drawText("WASD: Move   P: Pause", W - 18, H - 19, "#f5f5f5", 16, "right");
@@ -2649,13 +2743,12 @@
     });
 
     canvas.addEventListener("mousedown", event => {
-      if (event.button === 0) mouse.buttons[0] = true;
-      if (event.button === 2) mouse.buttons[1] = true;
+      // Left-click is the secondary weapon. Right-click intentionally does nothing.
+      if (event.button === 0) mouse.buttons[1] = true;
     });
 
     window.addEventListener("mouseup", event => {
-      if (event.button === 0) mouse.buttons[0] = false;
-      if (event.button === 2) mouse.buttons[1] = false;
+      if (event.button === 0) mouse.buttons[1] = false;
     });
 
     canvas.addEventListener("contextmenu", event => event.preventDefault());
