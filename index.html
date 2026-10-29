@@ -107,7 +107,11 @@
     .home-main {
       min-width: 0;
       padding: 4px 14px 10px;
-      align-self: center;
+      align-self: start;
+      /* Keep the menu centered in the visible panel even when the leaderboard is tall. */
+      position: sticky;
+      top: 50%;
+      transform: translateY(-50%);
     }
     .home-main h1 { margin-top: 0; }
     .version-label {
@@ -268,7 +272,7 @@
     @media (max-width: 700px) {
       #panel.home-panel { width: min(560px, calc(100vw - 16px)); padding: 12px; }
       .home-layout { grid-template-columns: minmax(0, 1fr); gap: 8px; }
-      .home-main { grid-row: 1; padding: 4px; }
+      .home-main { grid-row: 1; padding: 4px; position: static; top: auto; transform: none; }
       .home-layout .leaderboard-box { grid-row: 2; margin: 8px 0; }
       .leaderboard-box { padding: 10px; }
       .leaderboard-table { font-size: 12px; }
