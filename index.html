@@ -1113,7 +1113,7 @@
             description: "Add this gun to your inventory and equip it in a weapon slot.",
             cost,
             isGunPurchase: true,
-            action() { buyGun(name); }
+            action() { return buyGun(name); }
           });
         }
       }
@@ -1201,6 +1201,19 @@
           if (item.id === "damage-resistance" && runDamageResistance >= 0.75) return;
 
           updateEquippedSlots(slot1, slot2);
+
+          // Gun purchases deduct their price inside buyGun(). Do not deduct it
+          // again here, or the player can lose coins without receiving the gun.
+          if (item.isGunPurchase) {
+            const purchased = item.action();
+            if (!purchased) {
+              renderUpgradeShop(`Could not buy ${item.title.replace(/^Buy /, "")}. Check your coins and inventory.`, shopWave);
+              return;
+            }
+            renderUpgradeShop(`${item.title} purchased.`, shopWave);
+            return;
+          }
+
           runCoins -= item.cost;
           item.action();
           renderUpgradeShop(`${item.title} purchased.`, shopWave);
