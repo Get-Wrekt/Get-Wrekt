@@ -224,14 +224,71 @@
     #upgrade-status { min-height: 22px; color: #ffe978; }
 
     .tutorial-content {
-      max-width: 680px;
+      max-width: 760px;
       margin: 0 auto;
       text-align: left;
-      line-height: 1.55;
+      line-height: 1.35;
     }
 
-    .tutorial-content h2 { margin-bottom: 4px; }
-    .tutorial-content ul { padding-left: 24px; }
+    .tutorial-content h2 { margin: 14px 0 8px; }
+    .tutorial-intro { margin: 5px 0 10px; color: #dce5d5; }
+    .tutorial-controls {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .tutorial-control, .tutorial-card {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px;
+      border: 1px solid #53614e;
+      border-radius: 8px;
+      background: #293329;
+      min-width: 0;
+    }
+    .tutorial-control-icon {
+      display: grid;
+      place-items: center;
+      width: 46px;
+      min-width: 46px;
+      height: 42px;
+      border-radius: 6px;
+      background: #141914;
+      color: #f5d741;
+      font-size: 20px;
+      font-weight: bold;
+    }
+    .tutorial-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .tutorial-card { align-items: center; }
+    .tutorial-sprite {
+      width: 54px;
+      height: 54px;
+      min-width: 54px;
+      display: grid;
+      place-items: center;
+    }
+    .tutorial-sprite svg { display: block; width: 100%; height: 100%; }
+    .tutorial-card strong, .tutorial-control strong { display: block; color: #f5d741; margin-bottom: 3px; }
+    .tutorial-card span, .tutorial-control span { display: block; font-size: 13px; color: #edf1e9; }
+    .tutorial-pickup { font-size: 36px; line-height: 1; }
+    .tutorial-note {
+      margin: 10px 0;
+      padding: 10px;
+      border-left: 3px solid #c879ff;
+      background: #33283b;
+      border-radius: 4px;
+    }
+    @media (max-width: 560px) {
+      .tutorial-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .tutorial-controls { grid-template-columns: 1fr; }
+      .tutorial-card { padding: 7px; gap: 6px; }
+      .tutorial-sprite { width: 44px; height: 44px; min-width: 44px; }
+    }
 
 
     .leaderboard-box {
@@ -688,7 +745,6 @@
             <p>Survive the waves. Upgrade your weapons. Defeat the Gloops.</p>
             <div class="actions">
               <button id="play-button">PLAY</button>
-              <button id="tutorial-button">TUTORIAL</button>
             </div>
             <p class="version-label">v1.0.1</p>
           </div>
@@ -715,9 +771,8 @@
       panel.querySelector("#refresh-leaderboard-button").onclick = loadLeaderboard;
       panel.querySelector("#play-button").onclick = () => {
         saveNickname(nicknameInput.value);
-        showModeSelect();
+        showTutorial();
       };
-      panel.querySelector("#tutorial-button").onclick = showTutorial;
       loadLeaderboard();
     }
 
@@ -750,46 +805,116 @@
       panel.querySelector("#back-home-button").onclick = showHomeScreen;
     }
 
+    function tutorialGloopIcon(color, shape = "round") {
+      const path = shape === "tank"
+        ? '<path d="M10 31 L15 13 L25 9 L35 13 L42 31 L38 43 L15 43 Z"/>'
+        : shape === "rusher"
+          ? '<path d="M9 36 L13 19 L24 8 L37 18 L44 35 L36 43 L16 43 Z"/>'
+          : shape === "boss"
+            ? '<path d="M4 34 L10 15 L22 7 L34 10 L46 22 L47 37 L37 47 L13 46 Z"/>'
+            : '<path d="M8 35 C7 22 13 12 25 10 C37 9 45 20 44 33 C43 43 34 46 24 45 C14 45 9 42 8 35 Z"/>';
+      return `<svg viewBox="0 0 52 52" role="img" aria-label="Gloop enemy">
+        <ellipse cx="26" cy="46" rx="18" ry="3" fill="#141914" opacity=".5"/>
+        <g fill="${color}" stroke="#141914" stroke-width="2.5" stroke-linejoin="round">${path}</g>
+        <ellipse cx="20" cy="27" rx="4" ry="5" fill="#fff"/>
+        <ellipse cx="33" cy="27" rx="4" ry="5" fill="#fff"/>
+        <circle cx="21" cy="28" r="2" fill="#141914"/>
+        <circle cx="32" cy="28" r="2" fill="#141914"/>
+        <path d="M21 36 Q26 40 32 35" fill="none" stroke="#141914" stroke-width="2" stroke-linecap="round"/>
+      </svg>`;
+    }
+
+    function tutorialCorruptedGloopIcon() {
+      return `<svg viewBox="0 0 52 52" role="img" aria-label="Corrupted Gloop">
+        <ellipse cx="26" cy="46" rx="18" ry="3" fill="#141914" opacity=".5"/>
+        <path d="M8 35 C7 22 13 12 25 10 C37 9 45 20 44 33 C43 43 34 46 24 45 C14 45 9 42 8 35 Z" fill="#5a286f" stroke="#a9ff48" stroke-width="3"/>
+        <ellipse cx="18" cy="25" rx="4" ry="5" fill="#fff"/><ellipse cx="31" cy="25" rx="4" ry="5" fill="#fff"/>
+        <circle cx="19" cy="26" r="2" fill="#141914"/><circle cx="30" cy="26" r="2" fill="#141914"/>
+        <text x="26" y="40" font-size="14" text-anchor="middle" fill="#baff65">☣</text>
+      </svg>`;
+    }
+
+    function tutorialToxicTrailIcon() {
+      return `<svg viewBox="0 0 52 52" role="img" aria-label="Toxic trail">
+        <ellipse cx="26" cy="28" rx="22" ry="13" fill="#9bff43" opacity=".65" stroke="#c7ff75" stroke-width="2"/>
+        <ellipse cx="15" cy="19" rx="7" ry="4" fill="#9bff43" opacity=".8"/>
+        <ellipse cx="37" cy="37" rx="8" ry="4" fill="#9bff43" opacity=".8"/>
+        <text x="26" y="33" font-size="17" text-anchor="middle" fill="#355b17">☣</text>
+      </svg>`;
+    }
+
+    function tutorialCandyCaneIcon() {
+      return `<svg viewBox="0 0 52 52" role="img" aria-label="Candy cane pickup">
+        <g transform="rotate(-28 26 26)" fill="none" stroke-linecap="round">
+          <path d="M18 43 V17 A9 9 0 0 1 36 17 V20" stroke="#fff7ed" stroke-width="12"/>
+          <path d="M18 43 V17 A9 9 0 0 1 36 17 V20" stroke="#e63848" stroke-width="5" stroke-dasharray="7 7"/>
+        </g>
+      </svg>`;
+    }
+
     function showTutorial() {
       paused = true;
+
+      const enemyCards = [
+        ["#23be46", "round", "Basic Gloop", "Chases you. Touching it hurts."],
+        ["#f5d22d", "rusher", "Rusher", "Fast, but weaker."],
+        ["#696969", "tank", "Tank of Gloops", "Slow and tough. Splits when defeated."],
+        ["#f05a23", "round", "Flame Gloop", "Hurts you when you get close."],
+        ["#62d9f5", "round", "Ice Gloop", "Slows you when it hits."],
+        ["#ff69b4", "round", "Merger Gloop", "Combines into a bigger Gloop."],
+        ["#7b28a8", "boss", "Overlords", "Powerful bosses on milestone waves."]
+      ];
 
       showOverlay(`
         <h1>HOW TO PLAY</h1>
         <div class="tutorial-content">
-          <h2>Move</h2>
-          <p>Use <strong>WASD</strong> or the <strong>arrow keys</strong> to move around the arena.</p>
+          <h2>🎮 Controls</h2>
+          <div class="tutorial-controls">
+            <div class="tutorial-control"><div class="tutorial-control-icon">WASD<br>⬆️⬇️</div><div><strong>Move</strong><span>WASD or arrow keys</span></div></div>
+            <div class="tutorial-control"><div class="tutorial-control-icon">🖱️</div><div><strong>Shoot</strong><span>Aim with mouse. Left-click Slot 1; right-click Slot 2.</span></div></div>
+            <div class="tutorial-control"><div class="tutorial-control-icon">P</div><div><strong>Pause</strong><span>Press P to pause or resume.</span></div></div>
+            <div class="tutorial-control"><div class="tutorial-control-icon">⏱️</div><div><strong>Survive</strong><span>Outlast the timer or defeat every enemy.</span></div></div>
+          </div>
 
-          <h2>Shoot</h2>
-          <p>Aim with your mouse. Hold <strong>left-click</strong> to fire the weapon in Slot 1 and <strong>right-click</strong> to fire Slot 2.</p>
-          <p>Press <strong>P</strong> to pause or resume during a run.</p>
+          <h2>👾 Enemies</h2>
+          <p class="tutorial-intro">Recognise them by their colour and shape.</p>
+          <div class="tutorial-grid">
+            ${enemyCards.map(([color, shape, name, description]) => `
+              <div class="tutorial-card">
+                <div class="tutorial-sprite">${tutorialGloopIcon(color, shape)}</div>
+                <div><strong>${name}</strong><span>${description}</span></div>
+              </div>
+            `).join("")}
+          </div>
 
-          <h2>Waves and survival</h2>
-          <p>Enemies chase and attack you. Survive until the wave timer ends or defeat all enemies. Avoid touching enemies, collect dropped coins, and pick up cheese to restore health.</p>
-          <p><strong>Apocalypse Mode:</strong> basic Gloops become corrupted and leave short-lived toxic trails that deal 3 damage per tick. Candy canes replace cheese and restore 50 health.</p>
+          <h2>🧀 Pickups</h2>
+          <div class="tutorial-grid">
+            <div class="tutorial-card"><div class="tutorial-sprite tutorial-pickup">🪙</div><div><strong>Coins</strong><span>Collect from defeated enemies. Spend in the shop.</span></div></div>
+            <div class="tutorial-card"><div class="tutorial-sprite tutorial-pickup">🧀</div><div><strong>Cheese</strong><span>Restores 30 health.</span></div></div>
+          </div>
 
-          <h2>Enemies</h2>
-          <ul>
-            <li><strong>Basic Gloops:</strong> chase and damage you on contact.</li>
-            <li><strong>Rushers:</strong> fast, but less durable.</li>
-            <li><strong>Tanks:</strong> slow and tough; they split into smaller Gloops when defeated.</li>
-            <li><strong>Flame Gloops:</strong> damage you when you get close.</li>
-            <li><strong>Ice Gloops:</strong> slow you when they hit.</li>
-            <li><strong>Merger Gloops:</strong> gather and combine into a larger, stronger Gloop.</li>
-            <li><strong>Overlords:</strong> powerful bosses that appear on milestone waves.</li>
-          </ul>
+          <h2>☣️ Apocalypse Mode</h2>
+          <p class="tutorial-intro">Look out for these special visuals in Apocalypse mode.</p>
+          <div class="tutorial-grid">
+            <div class="tutorial-card"><div class="tutorial-sprite">${tutorialCorruptedGloopIcon()}</div><div><strong>Corrupted Gloop</strong><span>Basic Gloops turn purple with a toxic symbol and leave toxic trails.</span></div></div>
+            <div class="tutorial-card"><div class="tutorial-sprite">${tutorialToxicTrailIcon()}</div><div><strong>Toxic Trail</strong><span>Green toxic patches deal 3 damage per tick and last 0.7 seconds.</span></div></div>
+            <div class="tutorial-card"><div class="tutorial-sprite">${tutorialCandyCaneIcon()}</div><div><strong>Candy Cane</strong><span>Replaces cheese and restores 50 health.</span></div></div>
+          </div>
 
-          <h2>Shop and upgrades</h2>
-          <p>Every fifth wave, visit the shop to spend coins on upgrades. You can improve your weapons, health, speed, fire rate, and damage resistance. New guns are available every tenth wave.</p>
+          <h2>🛒 Shop & upgrades</h2>
+          <p class="tutorial-intro">Every 5 waves, spend coins on upgrades. New guns appear every 10 waves. Upgrade damage, health, speed, fire rate, and damage resistance.</p>
         </div>
-        <div class="actions">
+        <div class="actions tutorial-navigation">
           <button id="tutorial-back-button">BACK TO HOME</button>
+          <button id="tutorial-continue-button">CONTINUE</button>
         </div>
       `);
 
       panel.querySelector("#tutorial-back-button").onclick = showHomeScreen;
+      panel.querySelector("#tutorial-continue-button").onclick = showModeSelect;
     }
 
-    function makeWavePreview(waveNumber) {
+        function makeWavePreview(waveNumber) {
       const bossType = bossWaves[waveNumber];
 
       if (bossType) {
