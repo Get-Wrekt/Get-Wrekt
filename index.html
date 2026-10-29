@@ -100,12 +100,22 @@
     .home-layout {
       display: grid;
       grid-template-columns: minmax(300px, .95fr) minmax(320px, 1.05fr);
-      align-items: center;
+      align-items: start;
       gap: 26px;
       text-align: center;
     }
-    .home-main { min-width: 0; padding: 10px 14px; }
+    .home-main {
+      min-width: 0;
+      padding: 4px 14px 10px;
+      align-self: start;
+    }
     .home-main h1 { margin-top: 0; }
+    .version-label {
+      margin: 4px 0 0;
+      color: #aeb8a8;
+      font-size: 12px;
+      letter-spacing: 1px;
+    }
 
     h1, h2 { color: #f5d741; }
     h2 { margin-bottom: 8px; }
@@ -654,6 +664,7 @@
               <button id="play-button">PLAY</button>
               <button id="tutorial-button">TUTORIAL</button>
             </div>
+            <p class="version-label">v1.0.1</p>
           </div>
         </div>
       `);
