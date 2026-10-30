@@ -1710,8 +1710,9 @@
         const reach = level >= 15 ? 112 : level >= 3 ? 94 : 78;
         const halfArc = level >= 5 ? Math.PI * 0.43 : Math.PI * 0.32;
         const damage = weapon.damage * (1 + runDamageBonus) * (level >= 10 ? 1.15 : 1);
-        // Kenji-style slash: a curved arc with a matching circular-sector hitbox, not a dash.
-        slashEffects.push({ x: player.x, y: player.y, angle, reach, halfArc, life: 0.18, maxLife: 0.18, color: "#c8f5ff" });
+        // Animated sword swing: the blade sweeps across the curved attack arc.
+        // The hitbox remains the same curved sector; this is a visual swing, not a dash.
+        slashEffects.push({ x: player.x, y: player.y, angle, reach, halfArc, life: 0.30, maxLife: 0.30, color: "#c8f5ff" });
         let hitCount = 0;
         for (const enemy of [...enemies]) {
           if (enemy.hypnotized) continue;
@@ -2613,21 +2614,71 @@
       }
       for (const slash of slashEffects) {
         ctx.save();
-        ctx.globalAlpha = Math.max(0, slash.life / slash.maxLife);
+        const progress = Math.max(0, Math.min(1, 1 - slash.life / slash.maxLife));
+        const fade = Math.min(1, slash.life / (slash.maxLife * 0.28));
+        const arcRadius = slash.reach * 0.72;
+        const startAngle = slash.angle - slash.halfArc;
+        const bladeAngle = startAngle + (slash.halfArc * 2) * progress;
+
+        // A trail is revealed behind the moving blade instead of appearing all at once.
+        ctx.globalAlpha = 0.78 * fade;
         ctx.strokeStyle = slash.color;
-        ctx.lineWidth = 10;
+        ctx.lineWidth = 9;
         ctx.lineCap = "round";
         ctx.shadowColor = "#70dcff";
-        ctx.shadowBlur = 14;
+        ctx.shadowBlur = 15;
         ctx.beginPath();
-        // Curved Kenji-style slash arc; the damage hitbox uses the same arc sector.
-        ctx.arc(slash.x, slash.y, slash.reach * 0.72, slash.angle - slash.halfArc, slash.angle + slash.halfArc);
+        ctx.arc(slash.x, slash.y, arcRadius, startAngle, bladeAngle);
         ctx.stroke();
         ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 2.5;
         ctx.shadowBlur = 5;
         ctx.beginPath();
-        ctx.arc(slash.x, slash.y, slash.reach * 0.72, slash.angle - slash.halfArc, slash.angle + slash.halfArc);
+        ctx.arc(slash.x, slash.y, arcRadius, startAngle, bladeAngle);
+        ctx.stroke();
+
+        // Draw the katana itself at its current position in the swing.
+        const handX = slash.x + Math.cos(bladeAngle) * 17;
+        const handY = slash.y + Math.sin(bladeAngle) * 17;
+        const bladeLength = Math.min(58, slash.reach * 0.62);
+        const tipX = handX + Math.cos(bladeAngle) * bladeLength;
+        const tipY = handY + Math.sin(bladeAngle) * bladeLength;
+        ctx.globalAlpha = fade;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.shadowColor = "#8ceaff";
+        ctx.shadowBlur = 12;
+        ctx.strokeStyle = "#302b35";
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.moveTo(handX - Math.cos(bladeAngle) * 12, handY - Math.sin(bladeAngle) * 12);
+        ctx.lineTo(handX, handY);
+        ctx.stroke();
+        ctx.strokeStyle = "#e8f8ff";
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.moveTo(handX, handY);
+        ctx.quadraticCurveTo(
+          handX + Math.cos(bladeAngle + 0.12) * bladeLength * 0.55,
+          handY + Math.sin(bladeAngle + 0.12) * bladeLength * 0.55,
+          tipX, tipY
+        );
+        ctx.stroke();
+        ctx.strokeStyle = "#72dfff";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(handX + Math.cos(bladeAngle + Math.PI / 2) * 2,
+                   handY + Math.sin(bladeAngle + Math.PI / 2) * 2);
+        ctx.lineTo(tipX, tipY);
+        ctx.stroke();
+        // Small guard makes the moving weapon read clearly as a katana.
+        ctx.strokeStyle = "#f5d78e";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(handX + Math.cos(bladeAngle + Math.PI / 2) * 6,
+                   handY + Math.sin(bladeAngle + Math.PI / 2) * 6);
+        ctx.lineTo(handX - Math.cos(bladeAngle + Math.PI / 2) * 6,
+                   handY - Math.sin(bladeAngle + Math.PI / 2) * 6);
         ctx.stroke();
         ctx.restore();
       }
