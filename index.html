@@ -187,6 +187,16 @@
       margin: 16px 0;
     }
 
+    .map-select-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(210px, 1fr));
+      max-width: 680px;
+      margin: 18px auto;
+    }
+    .map-select-grid button { min-height: 104px; line-height: 1.35; }
+    .map-select-grid small { display: inline-block; margin-top: 6px; font-weight: normal; }
+    @media (max-width: 560px) { .map-select-grid { grid-template-columns: 1fr; } }
+
     .shop-layout {
       display: grid;
       grid-template-columns: minmax(190px, 240px) 1fr;
@@ -571,7 +581,15 @@
     };
 
     let selectedMode = "Medium";
+    let selectedMap = "OG Map";
     let waveDuration = modes[selectedMode].waveDuration;
+
+    const gameMaps = [
+      { id: "OG Map", title: "OG MAP", description: "The original Gloop Survival arena.", seasonal: false },
+      { id: "Meteorite Mayhem", title: "METEORITE MAYHEM", description: "Meteorites target visible areas every 5 seconds.", seasonal: false },
+      { id: "Antarctic Whiteout", title: "ANTARCTIC WHITEOUT", description: "Slippery movement and random 15-second blizzards.", seasonal: false },
+      { id: "Toxic Factory", title: "TOXIC FACTORY", description: "Seasonal map: toxic gas causes progressive suffocation.", seasonal: true }
+    ];
 
     const bossHealthScaling = {
       "Very Easy": { firstPercent: 80, firstIncrement: 50 },
@@ -781,6 +799,13 @@
     let runDamageResistance = 0;
 
     let mergerPhase = "gathering";
+    let meteoriteSchedule = 2;
+    let meteoriteWarnings = [];
+    let blizzardTimer = 0;
+    let blizzardActive = false;
+    let blizzardNext = 0;
+    let gasClouds = [];
+    let gasExposureTick = 0;
     let previewWaveNumber = 0;
     let previewEnemies = [];
     let activeWaveEnemies = [];
@@ -848,15 +873,15 @@
               <div class="actions">
                 <button id="play-button">PLAY</button>
               </div>
-              <p class="version-label">v1.1.2</p>
+              <p class="version-label">v1.2.1</p>
             </div>
 
             <aside class="changelog-box" aria-label="Game changelog">
               <div class="changelog-heading">
                 <h2>📋 CHANGELOG</h2>
-                <span class="changelog-version">v1.1.2</span>
+                <span class="changelog-version">v1.2.1</span>
               </div>
-              <p class="changelog-intro">The major update: new melee combat, new Overcharged bosses, balance changes, and clearer controls.</p>
+              <p class="changelog-intro">Choose from distinct arenas with new environmental hazards and survival challenges.</p>
 
               <h3 class="changelog-section">NEW WEAPON</h3>
               <ul class="changelog-list">
@@ -891,6 +916,10 @@
                 <li><strong>Right-click:</strong> attacks with your secondary weapon, if equipped.</li>
                 <li><strong>Spacebar:</strong> performs a dash with a 20-second cooldown.</li>
                 <li>Combat visuals and arena presentation have been polished.</li>
+                <li><strong>Map selection:</strong> choose an arena after selecting difficulty.</li>
+                <li><strong>Meteorite Mayhem:</strong> circular warnings precede meteorite impacts; impacts damage players and enemies.</li>
+                <li><strong>Antarctic Whiteout:</strong> slower movement and random 15-second blizzards with lantern-like visibility.</li>
+                <li><strong>Toxic Factory:</strong> seasonal map with toxic gas and progressive suffocation damage that recovers gradually outside gas.</li>
               </ul>
             </aside>
           </div>
@@ -944,11 +973,35 @@
         button.onclick = () => {
           selectedMode = button.dataset.mode;
           waveDuration = modes[selectedMode].waveDuration;
-          resetGame();
+          showMapSelect();
         };
       });
 
       panel.querySelector("#back-home-button").onclick = showHomeScreen;
+    }
+
+    function showMapSelect() {
+      paused = true;
+      showOverlay(`
+        <h1>CHOOSE YOUR MAP</h1>
+        <p>Each arena has its own environmental challenges.</p>
+        <div class="actions map-select-grid">
+          ${gameMaps.map(map => `
+            <button data-map="${escapeHtml(map.id)}">
+              ${escapeHtml(map.title)}${map.seasonal ? " · SEASONAL" : ""}<br>
+              <small>${escapeHtml(map.description)}</small>
+            </button>
+          `).join("")}
+        </div>
+        <div class="actions"><button id="back-modes-button">BACK</button></div>
+      `);
+      panel.querySelectorAll("[data-map]").forEach(button => {
+        button.onclick = () => {
+          selectedMap = button.dataset.map;
+          resetGame();
+        };
+      });
+      panel.querySelector("#back-modes-button").onclick = showModeSelect;
     }
 
     function tutorialGloopIcon(color, shape = "round") {
@@ -1312,6 +1365,22 @@
       playerPoisonTick = 0;
       playerDamageCooldown = 0;
       mergerPhase = "gathering";
+      meteoriteSchedule = 2;
+      meteoriteWarnings = [];
+      blizzardActive = false;
+      blizzardTimer = 0;
+      blizzardNext = 18 + Math.random() * 22;
+      gasExposureTick = 0;
+      gasClouds = Array.from({ length: 5 }, () => {
+        const radius = 105 + Math.random() * 55;
+        return {
+          x: bounds.left + radius + Math.random() * (bounds.right - bounds.left - radius * 2),
+          y: bounds.top + radius + Math.random() * (bounds.bottom - bounds.top - radius * 2),
+          radius,
+          vx: (Math.random() - 0.5) * 36,
+          vy: (Math.random() - 0.5) * 36
+        };
+      });
 
       runWeapons = ["Pistol"];
       weaponLevels = { Pistol: 1 };
@@ -1332,7 +1401,9 @@
         dashVy: 0,
         healthPotionCooldown: 0,
         magnetismPotionCooldown: 0,
-        magnetismPotionTime: 0
+        magnetismPotionTime: 0,
+        gasExposure: 0,
+        gasDamageTick: 0
       };
 
       previewWaveNumber = 1;
@@ -1760,7 +1831,7 @@
       }
     }
 
-    function killEnemy(enemy) {
+    function killEnemy(enemy, suppressTankSplit = false) {
       const index = enemies.indexOf(enemy);
       if (index === -1) return;
 
@@ -1781,7 +1852,7 @@
         cheeses.push({ x: enemy.x, y: enemy.y, life: 18 });
       }
 
-      if (enemy.type === "tank") {
+      if (enemy.type === "tank" && !suppressTankSplit) {
         for (let i = 0; i < 3; i++) {
           const child = spawn(
             "normal",
@@ -2008,7 +2079,7 @@
         player.y += player.dashVy * dt;
       } else if (horizontal || vertical) {
         const length = Math.hypot(horizontal, vertical);
-        const slow = slowTimer > 0 ? 0.5 : 1;
+        const slow = (slowTimer > 0 ? 0.5 : 1) * (selectedMap === "Antarctic Whiteout" ? 0.78 : 1) * (blizzardActive && selectedMap === "Antarctic Whiteout" ? 0.68 : 1);
         player.x += horizontal / length * player.speed * slow * dt;
         player.y += vertical / length * player.speed * slow * dt;
       }
@@ -2018,6 +2089,94 @@
         Math.min(bounds.right - playerHalf, player.x));
       player.y = Math.max(bounds.top + playerHalf,
         Math.min(bounds.bottom - playerHalf, player.y));
+
+      // Map-specific environmental systems.
+      if (selectedMap === "Meteorite Mayhem") {
+        meteoriteSchedule -= dt;
+        if (meteoriteSchedule <= 0) {
+          const radius = 150; // Increased from 120px for a larger impact zone.
+          const x = bounds.left + radius + Math.random() * (bounds.right - bounds.left - radius * 2);
+          const y = bounds.top + radius + Math.random() * (bounds.bottom - bounds.top - radius * 2);
+          meteoriteWarnings.push({ x, y, radius, timer: 3, falling: false, fallTimer: 0.45 });
+          meteoriteSchedule = 5;
+        }
+        for (const warning of [...meteoriteWarnings]) {
+          if (!warning.falling) {
+            warning.timer -= dt;
+            if (warning.timer <= 0) warning.falling = true;
+          } else {
+            warning.fallTimer -= dt;
+          }
+          if (warning.falling && warning.fallTimer <= 0) {
+            addBurst(warning.x, warning.y, "#ff8a32", 28, 8);
+            for (const enemy of [...enemies]) {
+              if (Math.hypot(enemy.x - warning.x, enemy.y - warning.y) <= warning.radius) {
+                // A direct meteorite impact crushes a tank outright; other enemies take standard damage.
+                const meteoriteDamage = enemy.type === "tank"
+                ? Math.max(300, enemy.maxHp)
+                : 300;
+              enemy.hp -= meteoriteDamage;
+              if (enemy.hp <= 0) {
+                // Meteorite damage defeats tanks through normal HP damage, without their usual split.
+                killEnemy(enemy, enemy.type === "tank");
+              }
+              }
+            }
+            if (Math.hypot(player.x - warning.x, player.y - warning.y) <= warning.radius) takePlayerDamage(300);
+            meteoriteWarnings.splice(meteoriteWarnings.indexOf(warning), 1);
+          }
+        }
+      }
+
+      if (selectedMap === "Antarctic Whiteout") {
+        if (blizzardActive) {
+          blizzardTimer -= dt;
+          if (blizzardTimer <= 0) {
+            blizzardActive = false;
+            blizzardNext = 25 + Math.random() * 35;
+          }
+        } else {
+          blizzardNext -= dt;
+          if (blizzardNext <= 0) {
+            blizzardActive = true;
+            blizzardTimer = 15;
+          }
+        }
+      }
+
+      if (selectedMap === "Toxic Factory") {
+        for (const cloud of gasClouds) {
+          cloud.x += cloud.vx * dt; cloud.y += cloud.vy * dt;
+          if (cloud.x < bounds.left + cloud.radius || cloud.x > bounds.right - cloud.radius) cloud.vx *= -1;
+          if (cloud.y < bounds.top + cloud.radius || cloud.y > bounds.bottom - cloud.radius) cloud.vy *= -1;
+          cloud.x = Math.max(bounds.left + cloud.radius, Math.min(bounds.right - cloud.radius, cloud.x));
+          cloud.y = Math.max(bounds.top + cloud.radius, Math.min(bounds.bottom - cloud.radius, cloud.y));
+        }
+        const inGas = (thing) => gasClouds.some(cloud => Math.hypot(thing.x - cloud.x, thing.y - cloud.y) < cloud.radius);
+        if (inGas(player)) {
+          player.gasExposure = Math.min(20, (player.gasExposure || 0) + dt);
+          player.gasDamageTick = (player.gasDamageTick || 0) - dt;
+          if (player.gasDamageTick <= 0) {
+            takePlayerDamage(2 + player.gasExposure * 1.2);
+            player.gasDamageTick = 0.5;
+          }
+        } else {
+          player.gasExposure = Math.max(0, (player.gasExposure || 0) - dt * 0.65);
+        }
+        for (const enemy of [...enemies]) {
+          if (inGas(enemy)) {
+            enemy.gasExposure = Math.min(20, (enemy.gasExposure || 0) + dt);
+            enemy.gasDamageTick = (enemy.gasDamageTick || 0) - dt;
+            if (enemy.gasDamageTick <= 0) {
+              enemy.hp -= 2 + enemy.gasExposure * 1.2;
+              enemy.gasDamageTick = 0.5;
+              if (enemy.hp <= 0) killEnemy(enemy);
+            }
+          } else {
+            enemy.gasExposure = Math.max(0, (enemy.gasExposure || 0) - dt * 0.65);
+          }
+        }
+      }
 
       for (let slot = 0; slot < 2; slot++) {
         cooldowns[slot] = Math.max(0, cooldowns[slot] - dt);
@@ -2140,7 +2299,7 @@
           }
 
           if (distanceToTarget > (enemy.size + target.size) / 2) {
-            const speed = enemy.frozenTimer > 0 ? 0 : enemy.speed;
+            const speed = enemy.frozenTimer > 0 ? 0 : enemy.speed * (selectedMap === "Antarctic Whiteout" ? (blizzardActive ? 0.68 : 0.78) : 1);
             enemy.x += tx / distanceToTarget * speed * dt;
             enemy.y += ty / distanceToTarget * speed * dt;
           } else if (enemy.hitCooldown <= 0) {
@@ -2192,9 +2351,9 @@
             enemy.x += enemy.dashVx * dt;
             enemy.y += enemy.dashVy * dt;
           } else {
-            const speed = enemy.frozenTimer > 0 ? 0 : enemy.speed;
-            enemy.x += dx / distance * speed * dt;
-            enemy.y += dy / distance * speed * dt;
+            const speed = enemy.frozenTimer > 0 ? 0 : enemy.speed * (selectedMap === "Antarctic Whiteout" ? (blizzardActive ? 0.68 : 0.78) : 1);
+            enemy.x += dx / distance * speed * (selectedMap === "Antarctic Whiteout" ? (blizzardActive ? 0.68 : 0.78) : 1) * dt;
+            enemy.y += dy / distance * speed * (selectedMap === "Antarctic Whiteout" ? (blizzardActive ? 0.68 : 0.78) : 1) * dt;
 
             if (enemy.dashCooldown <= 0 && distance > 100) {
               enemy.dashVx = dx / distance * 650;
@@ -2435,13 +2594,14 @@
     }
 
     function draw() {
-      ctx.fillStyle = selectedMode === "Apocalypse" ? "#252033" : "#5c9b41";
+      const mapBackground = selectedMap === "Antarctic Whiteout" ? "#b9d8e8" : selectedMap === "Toxic Factory" ? "#354b32" : selectedMap === "Meteorite Mayhem" ? "#51433c" : selectedMode === "Apocalypse" ? "#252033" : "#5c9b41";
+      ctx.fillStyle = mapBackground;
       ctx.fillRect(0, 0, W, H);
 
       // v1.1.2 arena polish: a subtle grid and deterministic floor details improve depth without affecting gameplay.
       ctx.save();
       ctx.globalAlpha = selectedMode === "Apocalypse" ? 0.12 : 0.10;
-      ctx.strokeStyle = selectedMode === "Apocalypse" ? "#b98bda" : "#d8f0b0";
+      ctx.strokeStyle = selectedMap === "Antarctic Whiteout" ? "#effaff" : selectedMap === "Toxic Factory" ? "#9bd36b" : selectedMap === "Meteorite Mayhem" ? "#a78d7b" : selectedMode === "Apocalypse" ? "#b98bda" : "#d8f0b0";
       ctx.lineWidth = 1;
       for (let gx = bounds.left + 25; gx < bounds.right; gx += 50) {
         ctx.beginPath(); ctx.moveTo(gx, bounds.top); ctx.lineTo(gx, bounds.bottom); ctx.stroke();
@@ -2474,6 +2634,39 @@
         ctx.restore();
       }
 
+
+      if (selectedMap === "Toxic Factory") {
+        ctx.save();
+        for (const cloud of gasClouds) {
+          const gradient = ctx.createRadialGradient(cloud.x, cloud.y, 5, cloud.x, cloud.y, cloud.radius);
+          gradient.addColorStop(0, "rgba(125,235,45,.58)");
+          gradient.addColorStop(1, "rgba(74,170,35,.04)");
+          ctx.fillStyle = gradient;
+          ctx.beginPath(); ctx.arc(cloud.x, cloud.y, cloud.radius, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      if (selectedMap === "Meteorite Mayhem") {
+        for (const warning of meteoriteWarnings) {
+          const pulse = 0.78 + Math.sin(performance.now() / 90) * 0.12;
+          ctx.fillStyle = `rgba(255,45,20,${0.16 * pulse})`;
+          ctx.beginPath(); ctx.arc(warning.x, warning.y, warning.radius, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = "#ff542e"; ctx.lineWidth = 4; ctx.setLineDash([9, 6]);
+          ctx.beginPath(); ctx.arc(warning.x, warning.y, warning.radius, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+          if (warning.falling) {
+            const progress = 1 - Math.max(0, warning.fallTimer) / 0.45;
+            const meteorY = warning.y - 190 * (1 - progress);
+            ctx.fillStyle = "rgba(255,125,35,.35)";
+            ctx.beginPath(); ctx.ellipse(warning.x, meteorY - 32, 13, 48, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = "#ff6a24"; ctx.beginPath(); ctx.arc(warning.x, meteorY, 17, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = "#ffd27a"; ctx.lineWidth = 3; ctx.stroke();
+          } else {
+            drawText(`${Math.ceil(warning.timer)}s`, warning.x, warning.y + 6, "#fff2d5", 22, "center");
+          }
+        }
+      }
+
       ctx.fillStyle = "#141914";
       ctx.fillRect(0, 0, W, 58);
       ctx.strokeStyle = "#141914";
@@ -2489,12 +2682,13 @@
 
       if (player) {
         drawText(`Mode: ${selectedMode}`, 250, 37, selectedMode === "Apocalypse" ? "#c879ff" : "#ffe978", 16);
+        drawText(`Map: ${selectedMap}`, 390, 37, "#f5f5f5", 14);
         if (selectedMode === "Apocalypse") {
           drawText("SEASON 1", 250, 53, "#a9ff62", 11);
         }
-        drawText(`Wave: ${wave}`, 390, 37);
-        drawText(`Time: ${Math.ceil(waveTimer)}s`, 465, 37, "#ffe978");
-        drawText(`Coins: ${runCoins}`, 570, 37, "#f5d741");
+        drawText(`Wave: ${wave}`, 555, 37);
+        drawText(`Time: ${Math.ceil(waveTimer)}s`, 625, 37, "#ffe978");
+        drawText(`Coins: ${runCoins}`, 710, 37, "#f5d741");
 
         ctx.fillStyle = "#351b1b";
         ctx.fillRect(700, 17, 280, 18);
@@ -2786,6 +2980,25 @@
         drawText(`WAVE ${wave}`, W / 2, 125, "#f5d741", 32, "center");
       }
 
+      if (selectedMap === "Antarctic Whiteout" && blizzardActive && player) {
+        // Only the smaller lantern circle remains visible; everything outside is fully obscured.
+        ctx.save();
+        ctx.beginPath(); ctx.rect(bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top); ctx.clip();
+        const visibilityRadius = Math.sqrt((((bounds.right - bounds.left) * (bounds.bottom - bounds.top)) / 7) / Math.PI);
+        ctx.fillStyle = "rgba(225,241,250,1)";
+        ctx.beginPath();
+        ctx.rect(bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top);
+        ctx.arc(player.x, player.y, visibilityRadius, 0, Math.PI * 2, true);
+        ctx.fill("evenodd");
+        const glow = ctx.createRadialGradient(player.x, player.y, visibilityRadius * 0.68, player.x, player.y, visibilityRadius);
+        glow.addColorStop(0, "rgba(225,241,250,0)");
+        glow.addColorStop(0.82, "rgba(225,241,250,.18)");
+        glow.addColorStop(1, "rgba(225,241,250,1)");
+        ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(player.x, player.y, visibilityRadius, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+        drawText("BLIZZARD!", W / 2, 92, "#ffffff", 23, "center");
+      }
+
       if (
         paused && player && !gameover && !choosingUpgrade &&
         overlay.style.display !== "grid"
@@ -2843,7 +3056,7 @@
         player.dashVx = dx * 850;
         player.dashVy = dy * 850;
         player.dashTime = 0.20;
-        player.dashCooldown = 20;
+        player.dashCooldown = selectedMap === "Meteorite Mayhem" ? 5 : 20;
         addBurst(player.x, player.y, "#65d9ff", 12, 5);
       }
 
