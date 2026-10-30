@@ -771,6 +771,10 @@
     let playerPoisonTimer = 0;
     let playerPoisonTick = 0;
     let playerDamageCooldown = 0;
+    let playerDashCooldown = 0;
+    let playerDashTime = 0;
+    let playerDashVx = 0;
+    let playerDashVy = 0;
     let lastTime = 0;
     let runDamageBonus = 0;
     let runFireRateBonus = 0;
@@ -883,9 +887,9 @@
               <h3 class="changelog-section">GAMEPLAY & CONTROLS</h3>
               <ul class="changelog-list">
                 <li><strong>Toxic trails:</strong> last 1.75 seconds and deal 3 damage per tick.</li>
-                <li><strong>Spacebar:</strong> attacks with the primary weapon (Slot 1).</li>
-                <li><strong>Left-click:</strong> attacks with the secondary weapon (Slot 2). If no secondary weapon is equipped, it does not attack.</li>
-                <li><strong>Right-click:</strong> no action assigned.</li>
+                <li><strong>Left-click:</strong> attacks with your primary weapon; aim with the mouse.</li>
+                <li><strong>Right-click:</strong> attacks with your secondary weapon, if equipped.</li>
+                <li><strong>Spacebar:</strong> performs a dash with a 20-second cooldown.</li>
                 <li>Combat visuals and arena presentation have been polished.</li>
               </ul>
             </aside>
@@ -1013,7 +1017,7 @@
           <h2>🎮 Controls</h2>
           <div class="tutorial-controls">
             <div class="tutorial-control"><div class="tutorial-control-icon">WASD<br>⬆️⬇️</div><div><strong>Move</strong><span>WASD or arrow keys</span></div></div>
-            <div class="tutorial-control"><div class="tutorial-control-icon">🖱️</div><div><strong>Shoot</strong><span>Aim with mouse. Spacebar uses your primary weapon (Slot 1); left-click uses your secondary weapon (Slot 2). Right-click does nothing.</span></div></div>
+            <div class="tutorial-control"><div class="tutorial-control-icon">🖱️</div><div><strong>Shoot</strong><span>Aim with your mouse. Left-click attacks with your primary weapon; right-click attacks with your secondary weapon if equipped. Press Spacebar to dash (20-second cooldown).</span></div></div>
             <div class="tutorial-control"><div class="tutorial-control-icon">P</div><div><strong>Pause</strong><span>Press P to pause or resume.</span></div></div>
             <div class="tutorial-control"><div class="tutorial-control-icon">⏱️</div><div><strong>Survive</strong><span>Outlast the timer or defeat every enemy.</span></div></div>
           </div>
@@ -1033,6 +1037,13 @@
           <div class="tutorial-grid">
             <div class="tutorial-card"><div class="tutorial-sprite tutorial-pickup">🪙</div><div><strong>Coins</strong><span>Collect from defeated enemies. Spend in the shop.</span></div></div>
             <div class="tutorial-card"><div class="tutorial-sprite tutorial-pickup">🧀</div><div><strong>Cheese</strong><span>Restores 30 health.</span></div></div>
+          </div>
+
+          <h2>🧪 Potions</h2>
+          <p class="tutorial-intro">You already have both potions. Press their keys during a run to use them. Each potion has its own cooldown.</p>
+          <div class="tutorial-grid">
+            <div class="tutorial-card"><div class="tutorial-sprite tutorial-pickup">❤️</div><div><strong>Health Potion (H)</strong><span>Press H to restore your health to full. Has a 50-second cooldown. It can only be used when you are not already at full health.</span></div></div>
+            <div class="tutorial-card"><div class="tutorial-sprite tutorial-pickup">🧲</div><div><strong>Magnetism Potion (M)</strong><span>Press M to greatly increase coin magnetism for 2 seconds. Has a 40-second cooldown.</span></div></div>
           </div>
 
           <h2>☣️ Apocalypse Mode</h2>
@@ -1314,7 +1325,14 @@
         size: 28,
         speed: 260,
         hp: 120,
-        maxHp: 120
+        maxHp: 120,
+        dashCooldown: 0,
+        dashTime: 0,
+        dashVx: 0,
+        dashVy: 0,
+        healthPotionCooldown: 0,
+        magnetismPotionCooldown: 0,
+        magnetismPotionTime: 0
       };
 
       previewWaveNumber = 1;
@@ -1979,10 +1997,17 @@
         Number(keys.has("s") || keys.has("ArrowDown")) -
         Number(keys.has("w") || keys.has("ArrowUp"));
 
-      if (horizontal || vertical) {
+      player.dashCooldown = Math.max(0, player.dashCooldown - dt);
+      player.dashTime = Math.max(0, player.dashTime - dt);
+      player.healthPotionCooldown = Math.max(0, player.healthPotionCooldown - dt);
+      player.magnetismPotionCooldown = Math.max(0, player.magnetismPotionCooldown - dt);
+      player.magnetismPotionTime = Math.max(0, player.magnetismPotionTime - dt);
+      if (player.dashTime > 0) {
+        player.x += player.dashVx * dt;
+        player.y += player.dashVy * dt;
+      } else if (horizontal || vertical) {
         const length = Math.hypot(horizontal, vertical);
         const slow = slowTimer > 0 ? 0.5 : 1;
-
         player.x += horizontal / length * player.speed * slow * dt;
         player.y += vertical / length * player.speed * slow * dt;
       }
@@ -1995,8 +2020,7 @@
 
       for (let slot = 0; slot < 2; slot++) {
         cooldowns[slot] = Math.max(0, cooldowns[slot] - dt);
-        const attackPressed = slot === 0 ? keys.has(" ") : mouse.buttons[1];
-        if (runWeapons[slot] && attackPressed && cooldowns[slot] <= 0) {
+        if (runWeapons[slot] && mouse.buttons[slot] && cooldowns[slot] <= 0) {
           fire(slot);
         }
       }
@@ -2298,6 +2322,20 @@
 
       for (const coin of [...coins]) {
         coin.life -= dt;
+
+        // The M potion temporarily pulls nearby coins toward the player.
+        if (player.magnetismPotionTime > 0) {
+          const dx = player.x - coin.x;
+          const dy = player.y - coin.y;
+          const distance = Math.hypot(dx, dy);
+          const magnetRadius = 360;
+          if (distance > 0 && distance < magnetRadius) {
+            const pullSpeed = 720;
+            const move = Math.min(distance, pullSpeed * dt);
+            coin.x += dx / distance * move;
+            coin.y += dy / distance * move;
+          }
+        }
 
         if (Math.hypot(player.x - coin.x, player.y - coin.y) < player.size / 2 + 14) {
           runCoins += coin.value;
@@ -2683,8 +2721,12 @@
         ctx.strokeRect(player.x - 14, player.y - 14, 28, 28);
 
         drawText(
-          `Space: ${runWeapons[0] || "None"} | Left-click: ${runWeapons[1] || "None"}`,
-          18, H - 19, "#f5f5f5", 16
+          `L-click: ${runWeapons[0] || "None"} | R-click: ${runWeapons[1] || "None"} | Dash: ${player.dashCooldown > 0 ? player.dashCooldown.toFixed(1) + "s" : "READY"}`,
+          18, H - 39, "#f5f5f5", 14
+        );
+        drawText(
+          `H: Health ${player.healthPotionCooldown > 0 ? player.healthPotionCooldown.toFixed(1) + "s" : "READY"} | M: Magnetism ${player.magnetismPotionCooldown > 0 ? player.magnetismPotionCooldown.toFixed(1) + "s" : "READY"}${player.magnetismPotionTime > 0 ? " (ACTIVE " + player.magnetismPotionTime.toFixed(1) + "s)" : ""}`,
+          18, H - 19, "#f5f5f5", 14
         );
         drawText("WASD: Move   P: Pause", W - 18, H - 19, "#f5f5f5", 16, "right");
       }
@@ -2723,6 +2765,37 @@
 
       keys.add(key);
 
+      if (!event.repeat && player && !paused && !gameover && !choosingUpgrade && key === "h" && player.healthPotionCooldown <= 0 && player.hp < player.maxHp) {
+        player.hp = player.maxHp;
+        player.healthPotionCooldown = 50;
+        addBurst(player.x, player.y, "#ef4b55", 18, 5);
+      }
+
+      if (!event.repeat && player && !paused && !gameover && !choosingUpgrade && key === "m" && player.magnetismPotionCooldown <= 0) {
+        player.magnetismPotionTime = 2;
+        player.magnetismPotionCooldown = 40;
+        addBurst(player.x, player.y, "#55c9ff", 18, 5);
+      }
+
+      if (key === " " && !event.repeat && player && !paused && !gameover && !choosingUpgrade && player.dashCooldown <= 0) {
+        let dx = Number(keys.has("d") || keys.has("ArrowRight")) - Number(keys.has("a") || keys.has("ArrowLeft"));
+        let dy = Number(keys.has("s") || keys.has("ArrowDown")) - Number(keys.has("w") || keys.has("ArrowUp"));
+        if (!dx && !dy) {
+          const aim = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+          dx = Math.cos(aim);
+          dy = Math.sin(aim);
+        } else {
+          const length = Math.hypot(dx, dy);
+          dx /= length;
+          dy /= length;
+        }
+        player.dashVx = dx * 850;
+        player.dashVy = dy * 850;
+        player.dashTime = 0.20;
+        player.dashCooldown = 20;
+        addBurst(player.x, player.y, "#65d9ff", 12, 5);
+      }
+
       if (
         key === "p" && player && !gameover && !choosingUpgrade &&
         overlay.style.display !== "grid"
@@ -2743,12 +2816,14 @@
     });
 
     canvas.addEventListener("mousedown", event => {
-      // Left-click is the secondary weapon. Right-click intentionally does nothing.
-      if (event.button === 0) mouse.buttons[1] = true;
+      // Left-click fires the primary weapon; right-click fires the secondary weapon.
+      if (event.button === 0) mouse.buttons[0] = true;
+      if (event.button === 2) mouse.buttons[1] = true;
     });
 
     window.addEventListener("mouseup", event => {
-      if (event.button === 0) mouse.buttons[1] = false;
+      if (event.button === 0) mouse.buttons[0] = false;
+      if (event.button === 2) mouse.buttons[1] = false;
     });
 
     canvas.addEventListener("contextmenu", event => event.preventDefault());
